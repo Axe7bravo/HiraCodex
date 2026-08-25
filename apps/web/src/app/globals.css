@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  --brand-blue: #2454d7;
+  --ink: #111318;
+  --surface-muted: #f2f4f7;
+  --success: #177245;
+  --danger: #b42318;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+.status-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+.status-card {
+  width: min(100%, 38rem);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border-top: 0.5rem solid var(--brand-blue);
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 1rem 3rem rgb(17 19 24 / 10%);
+}
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--brand-blue);
+  font-weight: 700;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.intro {
+  margin: 1.25rem 0 2rem;
+  color: #596170;
+  line-height: 1.6;
+}
+.state {
+  min-height: 5rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+.state-loading {
+  background: #eef3ff;
+  color: var(--brand-blue);
+}
+.state-failure {
+  display: grid;
+  gap: 0.35rem;
+  background: #fff0ee;
+  color: var(--danger);
+}
+.state-success {
+  background: #eaf8f0;
+  color: var(--success);
+}
+.state-success > strong {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+dl {
+  margin: 0;
+}
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.5rem;
+  border-top: 1px solid rgb(23 114 69 / 18%);
+}
+dt {
+  color: var(--ink);
+}
+dd {
+  margin: 0;
+  font-weight: 700;
+}
