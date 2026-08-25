@@ -14,6 +14,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { EmailService } from '../src/auth/email.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { VERIFICATION_DOCUMENT_STORAGE } from '../src/verifications/verification-document-storage';
 
 process.env.JWT_SECRET ??=
   'hira-e2e-secret-that-is-longer-than-thirty-two-characters';
@@ -27,6 +28,17 @@ describe('Hira API (e2e)', () => {
   let prisma: PrismaService;
   const sentResetEmails: { to: string; token: string }[] = [];
   let failEmailDelivery = false;
+  const storedVerificationDocuments = new Map<string, Buffer>();
+  const verificationStorage = {
+    put: jest.fn((key: string, contents: Buffer): Promise<void> => {
+      storedVerificationDocuments.set(key, contents);
+      return Promise.resolve();
+    }),
+    delete: jest.fn((key: string): Promise<void> => {
+      storedVerificationDocuments.delete(key);
+      return Promise.resolve();
+    }),
+  };
   const emailService = {
     sendPasswordReset: jest.fn((to: string, token: string): Promise<void> => {
       if (failEmailDelivery) {
@@ -43,6 +55,8 @@ describe('Hira API (e2e)', () => {
     })
       .overrideProvider(EmailService)
       .useValue(emailService)
+      .overrideProvider(VERIFICATION_DOCUMENT_STORAGE)
+      .useValue(verificationStorage)
       .compile();
     prisma = moduleFixture.get(PrismaService);
     app = moduleFixture.createNestApplication();
@@ -52,6 +66,8 @@ describe('Hira API (e2e)', () => {
 
   beforeEach(() => {
     failEmailDelivery = false;
+    verificationStorage.put.mockClear();
+    verificationStorage.delete.mockClear();
   });
 
   it('keeps the database health endpoint available', () =>
@@ -376,14 +392,12 @@ describe('Hira API (e2e)', () => {
         {
           userId: user.id,
           type: VerificationType.STUDENT,
-          documentKey: `e2e/${runId}/older-student-document`,
           status: VerificationStatus.APPROVED,
           createdAt: new Date('2026-08-01T00:00:00.000Z'),
         },
         {
           userId: user.id,
           type: VerificationType.STUDENT,
-          documentKey: `e2e/${runId}/newer-student-document`,
           status: VerificationStatus.REJECTED,
           createdAt: new Date('2026-08-02T00:00:00.000Z'),
         },
@@ -499,6 +513,222 @@ describe('Hira API (e2e)', () => {
     expect(
       await prisma.user.findUniqueOrThrow({ where: { id: other.id } }),
     ).toMatchObject({ firstName: 'Hira' });
+  });
+
+  it('submits student documents, exposes safe metadata, and blocks duplicates', async () => {
+    const agent = await authenticatedAgent(
+      'verification-student',
+      UserRole.TENANT,
+    );
+    const initial = await agent.get('/verifications/me').expect(200);
+    expect(getBody(initial)).toMatchObject({
+      id: null,
+      type: VerificationType.STUDENT,
+      status: 'NOT_SUBMITTED',
+      documents: [],
+    });
+
+    const submitted = await agent
+      .post('/verifications')
+      .attach('documents', Buffer.from('student card'), {
+        filename: 'student-card.pdf',
+        contentType: 'application/pdf',
+      })
+      .attach('documents', Buffer.from('enrolment proof'), {
+        filename: 'proof.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    expect(getBody(submitted)).toMatchObject({
+      type: VerificationType.STUDENT,
+      status: VerificationStatus.PENDING,
+      documents: [
+        { originalName: 'student-card.pdf', mimeType: 'application/pdf' },
+        { originalName: 'proof.png', mimeType: 'image/png' },
+      ],
+    });
+    expect(JSON.stringify(submitted.body)).not.toContain('objectKey');
+    expect(verificationStorage.put).toHaveBeenCalledTimes(2);
+
+    const profile = await agent.get('/users/me').expect(200);
+    expect(getBody(profile).verificationStatus).toBe(
+      VerificationStatus.PENDING,
+    );
+    await agent
+      .post('/verifications')
+      .attach('documents', Buffer.from('again'), {
+        filename: 'again.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(409);
+  });
+
+  it('allows a rejected submission to be replaced while preserving history', async () => {
+    const agent = await authenticatedAgent(
+      'verification-resubmit',
+      UserRole.TENANT,
+    );
+    await agent
+      .post('/verifications')
+      .attach('documents', Buffer.from('first'), {
+        filename: 'first.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: email('verification-resubmit') },
+    });
+    await prisma.verification.updateMany({
+      where: { userId: user.id },
+      data: {
+        status: VerificationStatus.REJECTED,
+        rejectionReason: 'The document is unreadable.',
+      },
+    });
+
+    const rejected = await agent.get('/verifications/me').expect(200);
+    expect(getBody(rejected)).toMatchObject({
+      status: VerificationStatus.REJECTED,
+      rejectionReason: 'The document is unreadable.',
+    });
+    await agent
+      .post('/verifications')
+      .attach('documents', Buffer.from('replacement'), {
+        filename: 'replacement.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(201);
+    expect(
+      await prisma.verification.count({ where: { userId: user.id } }),
+    ).toBe(2);
+    await prisma.verification.updateMany({
+      where: { userId: user.id, status: VerificationStatus.PENDING },
+      data: { status: VerificationStatus.APPROVED },
+    });
+    await agent
+      .post('/verifications')
+      .attach('documents', Buffer.from('not allowed'), {
+        filename: 'third.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(409);
+  });
+
+  it('enforces landlord, MIME, body, role, and authentication rules', async () => {
+    const landlord = await authenticatedAgent(
+      'verification-landlord',
+      UserRole.LANDLORD,
+    );
+    await landlord
+      .post('/verifications')
+      .attach('documents', Buffer.from('one'), {
+        filename: 'one.pdf',
+        contentType: 'application/pdf',
+      })
+      .attach('documents', Buffer.from('two'), {
+        filename: 'two.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(400);
+    await landlord
+      .post('/verifications')
+      .attach('documents', Buffer.from('registration'), {
+        filename: 'registration.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    await landlord
+      .post('/verifications')
+      .attach('documents', Buffer.from('text'), {
+        filename: 'notes.txt',
+        contentType: 'text/plain',
+      })
+      .expect(400);
+    await landlord
+      .post('/verifications')
+      .field('status', VerificationStatus.APPROVED)
+      .attach('documents', Buffer.from('valid'), {
+        filename: 'registration.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/verifications')
+      .attach('documents', Buffer.from('valid'), {
+        filename: 'valid.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(401);
+
+    await prisma.user.create({
+      data: {
+        email: email('verification-admin'),
+        firstName: 'Hira',
+        lastName: 'Admin',
+        passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
+        role: UserRole.ADMIN,
+      },
+    });
+    const admin = request.agent(app.getHttpServer());
+    await admin
+      .post('/auth/login')
+      .send({ email: email('verification-admin'), password })
+      .expect(200);
+    await admin
+      .post('/verifications')
+      .attach('documents', Buffer.from('valid'), {
+        filename: 'valid.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(403);
+  });
+
+  it('rejects missing, excessive, and oversized student documents', async () => {
+    const agent = await authenticatedAgent(
+      'verification-file-limits',
+      UserRole.TENANT,
+    );
+    await agent.post('/verifications').expect(400);
+
+    const excessive = agent.post('/verifications');
+    for (let index = 0; index < 4; index += 1) {
+      excessive.attach('documents', Buffer.from(`document-${index}`), {
+        filename: `document-${index}.pdf`,
+        contentType: 'application/pdf',
+      });
+    }
+    await excessive.expect(400);
+
+    await agent
+      .post('/verifications')
+      .attach('documents', Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: 'oversized.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(413);
+  });
+
+  it('does not expose another user or private storage identifiers', async () => {
+    const first = await authenticatedAgent(
+      'verification-private-first',
+      UserRole.TENANT,
+    );
+    const second = await authenticatedAgent(
+      'verification-private-second',
+      UserRole.TENANT,
+    );
+    await first
+      .post('/verifications')
+      .attach('documents', Buffer.from('private'), {
+        filename: 'private.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+
+    const response = await second.get('/verifications/me').expect(200);
+    expect(getBody(response)).toMatchObject({ status: 'NOT_SUBMITTED' });
+    expect(JSON.stringify(response.body)).not.toContain('objectKey');
+    expect(JSON.stringify(response.body)).not.toContain('verifications/');
   });
 
   function registration(accountEmail: string, role: UserRole) {

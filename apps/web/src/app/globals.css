@@ -427,6 +427,46 @@ dd {
   color: var(--muted);
   cursor: not-allowed;
 }
+.verification-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.verification-status span,
+.privacy-note,
+.document-list small {
+  color: var(--muted);
+}
+.status-approved strong {
+  color: var(--success);
+}
+.status-rejected strong {
+  color: var(--danger);
+}
+.document-list {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+.document-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+}
+.privacy-note {
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
 
 @media (max-width: 760px) {
   .site-header nav > a:first-child {

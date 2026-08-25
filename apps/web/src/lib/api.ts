@@ -36,14 +36,36 @@ export type UserProfile =
     })
   | (CommonProfile & { role: "ADMIN" });
 
+export type VerificationDocument = {
+  id: string;
+  originalName: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+};
+
+export type VerificationSubmission = {
+  id: string | null;
+  type: "STUDENT" | "LANDLORD";
+  status: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  createdAt: string | null;
+  documents: VerificationDocument[];
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(`${apiUrl}${path}`, {
     ...options,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: isFormData
+      ? options.headers
+      : { "Content-Type": "application/json", ...options.headers },
   });
 
   if (!response.ok) {

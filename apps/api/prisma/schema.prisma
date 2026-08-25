@@ -116,21 +116,36 @@ model LandlordProfile {
 }
 
 model Verification {
-  id              String             @id @default(cuid())
+  id              String                 @id @default(cuid())
   userId          String
   type            VerificationType
-  documentKey     String
-  status          VerificationStatus @default(PENDING)
+  status          VerificationStatus     @default(PENDING)
   rejectionReason String?
   reviewedById    String?
   reviewedAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  user            User               @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
-  reviewedBy      User?              @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  user            User                   @relation("VerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy      User?                  @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents       VerificationDocument[]
 
   @@index([userId, type, status])
   @@index([status, createdAt])
+}
+
+model VerificationDocument {
+  id             String       @id @default(cuid())
+  verificationId String
+  objectKey      String
+  /// Legacy rows have null metadata because the previous schema stored only an object key.
+  originalName   String?
+  mimeType       String?
+  sizeBytes      Int?
+  createdAt      DateTime     @default(now())
+  verification   Verification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+
+  @@index([verificationId, createdAt])
+  @@index([objectKey])
 }
 
 model Property {

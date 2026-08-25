@@ -146,6 +146,12 @@ export function AccountClient() {
         </div>
       </dl>
 
+      {profile.role !== "ADMIN" && (
+        <Link className="button button-outline" href="/account/verification">
+          Manage verification
+        </Link>
+      )}
+
       <form className="auth-form profile-form" onSubmit={save}>
         <div className="field-row">
           <ProfileInput
