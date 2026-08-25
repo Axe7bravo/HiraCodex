@@ -57,6 +57,7 @@ model User {
   passwordHash          String
   role                  UserRole
   status                UserStatus             @default(ACTIVE)
+  authVersion           Int                    @default(0)
   firstName             String
   lastName              String
   phone                 String?
@@ -74,9 +75,23 @@ model User {
   tenantRequests        AccommodationRequest[] @relation("RequestTenant")
   landlordRequests      AccommodationRequest[] @relation("RequestLandlord")
   adminActions          AuditLog[]             @relation("AuditActor")
+  passwordResetTokens   PasswordResetToken[]
 
   @@index([role, status])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
 }
 
 model TenantProfile {

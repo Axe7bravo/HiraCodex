@@ -25,25 +25,45 @@ export class SessionAuthGuard implements CanActivate {
       string | undefined;
     if (!token) throw new UnauthorizedException();
 
-    let payload: { sub: string };
+    let payload: { sub: string; authVersion: number };
     try {
-      payload = await this.jwt.verifyAsync<{ sub: string }>(token);
+      payload = await this.jwt.verifyAsync<{
+        sub: string;
+        authVersion: number;
+      }>(token);
     } catch {
       throw new UnauthorizedException();
     }
 
-    if (typeof payload.sub !== 'string' || !payload.sub) {
+    if (
+      typeof payload.sub !== 'string' ||
+      !payload.sub ||
+      typeof payload.authVersion !== 'number'
+    ) {
       throw new UnauthorizedException();
     }
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: safeUserSelect,
+      select: { ...safeUserSelect, authVersion: true },
     });
-    if (!user || user.status !== UserStatus.ACTIVE) {
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      user.authVersion !== payload.authVersion
+    ) {
       throw new UnauthorizedException();
     }
-    request.user = user;
+    request.user = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
     return true;
   }
 }

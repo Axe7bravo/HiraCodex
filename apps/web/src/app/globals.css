@@ -280,6 +280,19 @@ dd {
   color: var(--muted);
   font-weight: 400;
 }
+.password-label-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.password-label-row a {
+  color: var(--blue);
+  font-weight: 800;
+}
+.auth-result {
+  display: grid;
+  gap: 1rem;
+}
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

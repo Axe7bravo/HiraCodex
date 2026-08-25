@@ -32,7 +32,10 @@ describe('SessionAuthGuard', () => {
   });
 
   it('rejects a session whose user no longer exists', async () => {
-    jwt.verifyAsync.mockResolvedValueOnce({ sub: 'missing-user' });
+    jwt.verifyAsync.mockResolvedValueOnce({
+      sub: 'missing-user',
+      authVersion: 0,
+    });
     prisma.user.findUnique.mockResolvedValueOnce(null);
 
     await expect(
@@ -41,7 +44,10 @@ describe('SessionAuthGuard', () => {
   });
 
   it('rejects a suspended user', async () => {
-    jwt.verifyAsync.mockResolvedValueOnce({ sub: 'suspended-user' });
+    jwt.verifyAsync.mockResolvedValueOnce({
+      sub: 'suspended-user',
+      authVersion: 0,
+    });
     prisma.user.findUnique.mockResolvedValueOnce(user(UserStatus.SUSPENDED));
 
     await expect(
@@ -51,12 +57,24 @@ describe('SessionAuthGuard', () => {
 
   it('allows unexpected database errors to propagate', async () => {
     const databaseError = new Error('database unavailable');
-    jwt.verifyAsync.mockResolvedValueOnce({ sub: 'user-id' });
+    jwt.verifyAsync.mockResolvedValueOnce({ sub: 'user-id', authVersion: 0 });
     prisma.user.findUnique.mockRejectedValueOnce(databaseError);
 
     await expect(guard.canActivate(contextFor('valid-token'))).rejects.toBe(
       databaseError,
     );
+  });
+
+  it('rejects a session issued before the auth version changed', async () => {
+    jwt.verifyAsync.mockResolvedValueOnce({ sub: 'user-id', authVersion: 0 });
+    prisma.user.findUnique.mockResolvedValueOnce({
+      ...user(UserStatus.ACTIVE),
+      authVersion: 1,
+    });
+
+    await expect(
+      guard.canActivate(contextFor('old-session')),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
 
@@ -78,6 +96,7 @@ function user(status: UserStatus) {
     lastName: 'Tester',
     role: UserRole.TENANT,
     status,
+    authVersion: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

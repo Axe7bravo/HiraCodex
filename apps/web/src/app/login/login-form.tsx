@@ -49,7 +49,10 @@ export function LoginForm() {
         <input name="email" type="email" autoComplete="email" required />
       </label>
       <label>
-        Password
+        <span className="password-label-row">
+          <span>Password</span>
+          <Link href="/forgot-password">Forgot password?</Link>
+        </span>
         <input
           name="password"
           type="password"

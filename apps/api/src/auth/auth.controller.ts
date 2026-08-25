@@ -1,9 +1,18 @@
-import { Body, Controller, HttpCode, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+} from '@nestjs/common';
 import type { CookieOptions, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_MS } from './auth.constants';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -29,6 +38,18 @@ export class AuthController {
   @HttpCode(204)
   logout(@Res({ passthrough: true }) response: Response): void {
     response.clearCookie(SESSION_COOKIE_NAME, this.cookieAttributes());
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.ACCEPTED)
+  forgotPassword(@Body() input: ForgotPasswordDto) {
+    return this.authService.forgotPassword(input);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() input: ResetPasswordDto) {
+    return this.authService.resetPassword(input);
   }
 
   private cookieAttributes(): CookieOptions {
