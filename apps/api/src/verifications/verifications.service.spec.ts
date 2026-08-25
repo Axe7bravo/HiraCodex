@@ -23,6 +23,7 @@ describe('VerificationsService', () => {
   };
   const storage = {
     put: jest.fn(),
+    get: jest.fn(),
     delete: jest.fn(),
   };
   let service: VerificationsService;

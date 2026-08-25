@@ -54,6 +54,42 @@ export type VerificationSubmission = {
   documents: VerificationDocument[];
 };
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export type AdminVerificationOwner = Pick<
+  SafeUser,
+  "id" | "firstName" | "lastName" | "email" | "role"
+> & {
+  tenantProfile: { institution: string | null } | null;
+  landlordProfile: { organisation: string | null } | null;
+};
+
+export type AdminVerificationQueueItem = {
+  id: string;
+  type: "STUDENT" | "LANDLORD";
+  status: "PENDING";
+  createdAt: string;
+  user: AdminVerificationOwner;
+  documentCount: number;
+};
+
+export type AdminVerificationDetail = Omit<
+  VerificationSubmission,
+  "id" | "status"
+> & {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  user: AdminVerificationOwner;
+  reviewedBy: Pick<SafeUser, "id" | "firstName" | "lastName" | "email"> | null;
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -75,7 +111,10 @@ export async function apiRequest<T>(
     const message = Array.isArray(body?.message)
       ? body.message[0]
       : body?.message;
-    throw new Error(message ?? "Something went wrong. Please try again.");
+    throw new ApiError(
+      message ?? "Something went wrong. Please try again.",
+      response.status,
+    );
   }
 
   return response.status === 204

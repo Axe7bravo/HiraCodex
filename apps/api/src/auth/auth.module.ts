@@ -19,6 +19,6 @@ import { SessionAuthGuard } from './session-auth.guard';
   ],
   controllers: [AuthController],
   providers: [AuthService, EmailService, SessionAuthGuard, RolesGuard],
-  exports: [JwtModule, SessionAuthGuard, RolesGuard],
+  exports: [JwtModule, SessionAuthGuard, RolesGuard, EmailService],
 })
 export class AuthModule {}

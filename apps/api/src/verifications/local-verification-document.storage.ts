@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { VerificationDocumentStorage } from './verification-document-storage';
 
@@ -19,6 +19,10 @@ export class LocalVerificationDocumentStorage implements VerificationDocumentSto
 
   async delete(objectKey: string): Promise<void> {
     await rm(this.resolveObjectKey(objectKey), { force: true });
+  }
+
+  get(objectKey: string): Promise<Buffer> {
+    return readFile(this.resolveObjectKey(objectKey));
   }
 
   private resolveObjectKey(objectKey: string): string {

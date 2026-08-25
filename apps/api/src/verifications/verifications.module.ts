@@ -8,12 +8,15 @@ import { S3VerificationDocumentStorage } from './s3-verification-document.storag
 import { VERIFICATION_DOCUMENT_STORAGE } from './verification-document-storage';
 import { VerificationsController } from './verifications.controller';
 import { VerificationsService } from './verifications.service';
+import { AdminVerificationsController } from './admin-verifications.controller';
+import { AdminVerificationsService } from './admin-verifications.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [VerificationsController],
+  controllers: [VerificationsController, AdminVerificationsController],
   providers: [
     VerificationsService,
+    AdminVerificationsService,
     {
       provide: VERIFICATION_DOCUMENT_STORAGE,
       inject: [ConfigService],

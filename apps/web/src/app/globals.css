@@ -467,6 +467,58 @@ dd {
   border-top: 1px solid var(--line);
   font-size: 0.9rem;
 }
+.admin-shell {
+  width: min(100% - 2rem, 64rem);
+}
+.admin-review-card select,
+.admin-review-card textarea {
+  width: 100%;
+  min-height: 2.8rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  font: inherit;
+}
+.admin-review-card textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.admin-filter {
+  max-width: 16rem;
+}
+.admin-verification-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.admin-verification-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+.admin-verification-list li div {
+  display: grid;
+  gap: 0.25rem;
+}
+.admin-verification-list span,
+.admin-verification-list small {
+  color: var(--muted);
+}
+.review-actions {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  align-items: start;
+  gap: 1rem;
+}
+.button-danger {
+  background: var(--danger);
+  color: white;
+}
 
 @media (max-width: 760px) {
   .site-header nav > a:first-child {
@@ -507,6 +559,11 @@ dd {
     display: grid;
   }
   .profile-summary {
+    grid-template-columns: 1fr;
+  }
+  .admin-verification-list li,
+  .review-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 }

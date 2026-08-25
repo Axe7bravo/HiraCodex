@@ -28,6 +28,7 @@ describe('Hira API (e2e)', () => {
   let prisma: PrismaService;
   const sentResetEmails: { to: string; token: string }[] = [];
   let failEmailDelivery = false;
+  let failVerificationEmail = false;
   const storedVerificationDocuments = new Map<string, Buffer>();
   const verificationStorage = {
     put: jest.fn((key: string, contents: Buffer): Promise<void> => {
@@ -38,6 +39,12 @@ describe('Hira API (e2e)', () => {
       storedVerificationDocuments.delete(key);
       return Promise.resolve();
     }),
+    get: jest.fn((key: string): Promise<Buffer> => {
+      const contents = storedVerificationDocuments.get(key);
+      return contents
+        ? Promise.resolve(contents)
+        : Promise.reject(new Error('object unavailable'));
+    }),
   };
   const emailService = {
     sendPasswordReset: jest.fn((to: string, token: string): Promise<void> => {
@@ -47,6 +54,16 @@ describe('Hira API (e2e)', () => {
       sentResetEmails.push({ to, token });
       return Promise.resolve();
     }),
+    sendVerificationApproved: jest.fn((): Promise<void> =>
+      failVerificationEmail
+        ? Promise.reject(new Error('provider unavailable'))
+        : Promise.resolve(),
+    ),
+    sendVerificationRejected: jest.fn((): Promise<void> =>
+      failVerificationEmail
+        ? Promise.reject(new Error('provider unavailable'))
+        : Promise.resolve(),
+    ),
   };
 
   beforeAll(async () => {
@@ -66,8 +83,12 @@ describe('Hira API (e2e)', () => {
 
   beforeEach(() => {
     failEmailDelivery = false;
+    failVerificationEmail = false;
     verificationStorage.put.mockClear();
     verificationStorage.delete.mockClear();
+    verificationStorage.get.mockClear();
+    emailService.sendVerificationApproved.mockClear();
+    emailService.sendVerificationRejected.mockClear();
   });
 
   it('keeps the database health endpoint available', () =>
@@ -280,7 +301,7 @@ describe('Hira API (e2e)', () => {
     const user = await prisma.user.findUniqueOrThrow({
       where: { email: email('expired-reset') },
     });
-    const expiredToken = 'expired-reset-token';
+    const expiredToken = `expired-reset-token-${runId}`;
     await prisma.passwordResetToken.create({
       data: {
         userId: user.id,
@@ -731,6 +752,275 @@ describe('Hira API (e2e)', () => {
     expect(JSON.stringify(response.body)).not.toContain('verifications/');
   });
 
+  it('protects every admin verification route by authoritative role', async () => {
+    const tenant = await authenticatedAgent(
+      'admin-auth-tenant',
+      UserRole.TENANT,
+    );
+    const landlord = await authenticatedAgent(
+      'admin-auth-landlord',
+      UserRole.LANDLORD,
+    );
+    for (const path of [
+      '/admin/verifications',
+      '/admin/verifications/missing',
+      '/admin/verifications/missing/documents/missing',
+    ]) {
+      await request(app.getHttpServer()).get(path).expect(401);
+      await tenant.get(path).expect(403);
+      await landlord.get(path).expect(403);
+    }
+    await request(app.getHttpServer())
+      .patch('/admin/verifications/missing')
+      .send({ status: VerificationStatus.APPROVED })
+      .expect(401);
+    await tenant
+      .patch('/admin/verifications/missing')
+      .send({ status: VerificationStatus.APPROVED })
+      .expect(403);
+    await landlord
+      .patch('/admin/verifications/missing')
+      .send({ status: VerificationStatus.APPROVED })
+      .expect(403);
+  });
+
+  it('returns a FIFO pending queue, safe detail, and private document download', async () => {
+    const first = await authenticatedAgent(
+      'admin-queue-first',
+      UserRole.TENANT,
+    );
+    const second = await authenticatedAgent(
+      'admin-queue-second',
+      UserRole.LANDLORD,
+    );
+    const firstSubmission = await first
+      .post('/verifications')
+      .attach('documents', Buffer.from('first-private-document'), {
+        filename: 'student\r\ncard.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    const secondSubmission = await second
+      .post('/verifications')
+      .attach('documents', Buffer.from('second-private-document'), {
+        filename: 'registration.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    const firstId = String(getBody(firstSubmission).id);
+    const secondId = String(getBody(secondSubmission).id);
+    await prisma.verification.update({
+      where: { id: firstId },
+      data: { createdAt: new Date('2026-01-01T00:00:00.000Z') },
+    });
+    await prisma.verification.update({
+      where: { id: secondId },
+      data: { createdAt: new Date('2026-01-02T00:00:00.000Z') },
+    });
+    const admin = await authenticatedAdminAgent('admin-queue-reviewer');
+    const queue = await admin.get('/admin/verifications').expect(200);
+    const queueRows = queue.body as Array<Record<string, unknown>>;
+    const relevant = queueRows.filter(
+      ({ id }) => id === firstId || id === secondId,
+    );
+    expect(relevant.map(({ id }) => id)).toEqual([firstId, secondId]);
+    expect(relevant[0]).toMatchObject({
+      type: VerificationType.STUDENT,
+      documentCount: 1,
+    });
+    expect(JSON.stringify(relevant)).not.toContain('objectKey');
+
+    const detail = await admin
+      .get(`/admin/verifications/${firstId}`)
+      .expect(200);
+    expect(getBody(detail)).toMatchObject({
+      id: firstId,
+      user: { email: email('admin-queue-first'), role: UserRole.TENANT },
+    });
+    expect(JSON.stringify(detail.body)).not.toContain('objectKey');
+    const documentId = String(
+      (getBody(detail).documents as Array<Record<string, unknown>>)[0].id,
+    );
+    const download = await admin
+      .get(`/admin/verifications/${firstId}/documents/${documentId}`)
+      .buffer(true)
+      .parse((response, callback) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(download.body).toEqual(Buffer.from('first-private-document'));
+    expect(download.headers['content-type']).toContain('application/pdf');
+    expect(download.headers['content-disposition']).toContain('attachment');
+    expect(download.headers['x-content-type-options']).toBe('nosniff');
+    expect(download.headers['cache-control']).toBe('private, no-store');
+    expect(JSON.stringify(download.headers)).not.toContain('verifications/');
+    await admin
+      .get(`/admin/verifications/${secondId}/documents/${documentId}`)
+      .expect(404);
+    await admin
+      .get(`/admin/verifications/${firstId}/documents/missing`)
+      .expect(404);
+    storedVerificationDocuments.clear();
+    const storageFailure = await admin
+      .get(`/admin/verifications/${firstId}/documents/${documentId}`)
+      .expect(500);
+    expect(JSON.stringify(storageFailure.body)).not.toContain('verifications/');
+    expect(JSON.stringify(storageFailure.body)).not.toContain('object');
+  });
+
+  it('atomically approves a pending verification, audits it, and emails afterward', async () => {
+    const owner = await authenticatedAgent(
+      'admin-approve-owner',
+      UserRole.TENANT,
+    );
+    const submission = await owner
+      .post('/verifications')
+      .attach('documents', Buffer.from('approval document'), {
+        filename: 'approval.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    const verificationId = String(getBody(submission).id);
+    const admin = await authenticatedAdminAgent('admin-approver');
+    const adminUser = await prisma.user.findUniqueOrThrow({
+      where: { email: email('admin-approver') },
+    });
+    const reviewed = await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: VerificationStatus.APPROVED })
+      .expect(200);
+    expect(getBody(reviewed)).toMatchObject({
+      status: VerificationStatus.APPROVED,
+      rejectionReason: null,
+      reviewedBy: { id: adminUser.id },
+    });
+    expect(getBody(reviewed).reviewedAt).toBeTruthy();
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          action: 'VERIFICATION_APPROVED',
+          targetId: verificationId,
+          actorId: adminUser.id,
+        },
+      }),
+    ).toBe(1);
+    expect(emailService.sendVerificationApproved).toHaveBeenCalledWith(
+      email('admin-approve-owner'),
+    );
+    expect(
+      getBody(await owner.get('/verifications/me').expect(200)).status,
+    ).toBe(VerificationStatus.APPROVED);
+    expect(
+      getBody(await owner.get('/users/me').expect(200)).verificationStatus,
+    ).toBe(VerificationStatus.APPROVED);
+    const queueAfterReview = await admin
+      .get('/admin/verifications')
+      .expect(200);
+    expect(
+      (queueAfterReview.body as Array<{ id: string }>).some(
+        ({ id }) => id === verificationId,
+      ),
+    ).toBe(false);
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: VerificationStatus.REJECTED, rejectionReason: 'No' })
+      .expect(409);
+  });
+
+  it('rejects with a reason, survives email failure, and permits resubmission', async () => {
+    const owner = await authenticatedAgent(
+      'admin-reject-owner',
+      UserRole.LANDLORD,
+    );
+    const submission = await owner
+      .post('/verifications')
+      .attach('documents', Buffer.from('rejection document'), {
+        filename: 'landlord.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    const verificationId = String(getBody(submission).id);
+    const admin = await authenticatedAdminAgent('admin-rejecter');
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: VerificationStatus.REJECTED })
+      .expect(400);
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: VerificationStatus.REJECTED, rejectionReason: '   ' })
+      .expect(400);
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: VerificationStatus.APPROVED, rejectionReason: 'No' })
+      .expect(400);
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({ status: 'PENDING' })
+      .expect(400);
+
+    failVerificationEmail = true;
+    await admin
+      .patch(`/admin/verifications/${verificationId}`)
+      .send({
+        status: VerificationStatus.REJECTED,
+        rejectionReason: '  The registration is unreadable.  ',
+      })
+      .expect(200);
+    expect(emailService.sendVerificationRejected).toHaveBeenCalledWith(
+      email('admin-reject-owner'),
+      'The registration is unreadable.',
+    );
+    expect(
+      getBody(await owner.get('/verifications/me').expect(200)),
+    ).toMatchObject({
+      status: VerificationStatus.REJECTED,
+      rejectionReason: 'The registration is unreadable.',
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: { action: 'VERIFICATION_REJECTED', targetId: verificationId },
+      }),
+    ).toBe(1);
+    await owner
+      .post('/verifications')
+      .attach('documents', Buffer.from('replacement'), {
+        filename: 'replacement.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+  });
+
+  it('allows exactly one concurrent admin review and one audit record', async () => {
+    const owner = await authenticatedAgent('admin-race-owner', UserRole.TENANT);
+    const submission = await owner
+      .post('/verifications')
+      .attach('documents', Buffer.from('race'), {
+        filename: 'race.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    const verificationId = String(getBody(submission).id);
+    const firstAdmin = await authenticatedAdminAgent('admin-race-first');
+    const secondAdmin = await authenticatedAdminAgent('admin-race-second');
+    const responses = await Promise.all([
+      firstAdmin
+        .patch(`/admin/verifications/${verificationId}`)
+        .send({ status: VerificationStatus.APPROVED }),
+      secondAdmin.patch(`/admin/verifications/${verificationId}`).send({
+        status: VerificationStatus.REJECTED,
+        rejectionReason: 'Rejected concurrently.',
+      }),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    expect(
+      await prisma.auditLog.count({
+        where: { targetType: 'Verification', targetId: verificationId },
+      }),
+    ).toBe(1);
+  });
+
   function registration(accountEmail: string, role: UserRole) {
     return {
       firstName: 'Hira',
@@ -749,6 +1039,24 @@ describe('Hira API (e2e)', () => {
 
   async function authenticatedAgent(name: string, role: UserRole) {
     await register(name, role).expect(201);
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/auth/login')
+      .send({ email: email(name), password })
+      .expect(200);
+    return agent;
+  }
+
+  async function authenticatedAdminAgent(name: string) {
+    await prisma.user.create({
+      data: {
+        email: email(name),
+        firstName: 'Admin',
+        lastName: 'Reviewer',
+        passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
+        role: UserRole.ADMIN,
+      },
+    });
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/auth/login')
@@ -798,6 +1106,11 @@ describe('Hira API (e2e)', () => {
 
   afterAll(async () => {
     if (prisma) {
+      await prisma.auditLog.deleteMany({
+        where: {
+          actor: { email: { startsWith: `e2e-${runId}-` } },
+        },
+      });
       await prisma.user.deleteMany({
         where: { email: { startsWith: `e2e-${runId}-` } },
       });

@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -30,5 +31,13 @@ export class S3VerificationDocumentStorage implements VerificationDocumentStorag
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }),
     );
+  }
+
+  async get(objectKey: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }),
+    );
+    if (!response.Body) throw new Error('Verification document is unavailable');
+    return Buffer.from(await response.Body.transformToByteArray());
   }
 }
