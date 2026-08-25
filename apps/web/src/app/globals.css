@@ -377,6 +377,56 @@ dd {
 .account-card dl {
   margin: 1.5rem 0;
 }
+.profile-shell {
+  width: min(100% - 2rem, 48rem);
+}
+.profile-card {
+  display: grid;
+  gap: 1.5rem;
+}
+.profile-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+.profile-heading p:not(.eyebrow) {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+.profile-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 0 !important;
+}
+.profile-summary div {
+  display: grid;
+  justify-content: start;
+  gap: 0.25rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.profile-summary dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.profile-summary dd {
+  font-size: 0.9rem;
+}
+.profile-form {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+.auth-form input[readonly] {
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+}
 
 @media (max-width: 760px) {
   .site-header nav > a:first-child {
@@ -412,5 +462,11 @@ dd {
   }
   .auth-card {
     padding: 1.2rem;
+  }
+  .profile-heading {
+    display: grid;
+  }
+  .profile-summary {
+    grid-template-columns: 1fr;
   }
 }

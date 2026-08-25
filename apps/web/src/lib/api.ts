@@ -12,6 +12,30 @@ export type SafeUser = {
   updatedAt: string;
 };
 
+type CommonProfile = SafeUser & {
+  phone: string | null;
+  contactMethod: string | null;
+};
+
+export type UserProfile =
+  | (CommonProfile & {
+      role: "TENANT";
+      verificationStatus: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
+      tenantProfile: {
+        institution: string | null;
+        expectedMoveIn: string | null;
+      };
+    })
+  | (CommonProfile & {
+      role: "LANDLORD";
+      verificationStatus: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
+      landlordProfile: {
+        organisation: string | null;
+        propertyCount: number | null;
+      };
+    })
+  | (CommonProfile & { role: "ADMIN" });
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},

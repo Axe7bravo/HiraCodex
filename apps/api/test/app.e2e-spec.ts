@@ -1,6 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { UserRole, UserStatus } from '@prisma/client';
+import {
+  UserRole,
+  UserStatus,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 import { createHash } from 'node:crypto';
 import request from 'supertest';
@@ -241,18 +246,18 @@ describe('Hira API (e2e)', () => {
   });
 
   it('allows only one concurrent reset attempt for the same token', async () => {
-  await register('concurrent-reset', UserRole.TENANT).expect(201);
+    await register('concurrent-reset', UserRole.TENANT).expect(201);
 
-  await forgotPassword(email('concurrent-reset')).expect(202);
-  const token = resetTokenFor(email('concurrent-reset'));
+    await forgotPassword(email('concurrent-reset')).expect(202);
+    const token = resetTokenFor(email('concurrent-reset'));
 
-  const [first, second] = await Promise.all([
-    resetPassword(token, 'ConcurrentPass123!'),
-    resetPassword(token, 'ConcurrentPass456!'),
-  ]);
+    const [first, second] = await Promise.all([
+      resetPassword(token, 'ConcurrentPass123!'),
+      resetPassword(token, 'ConcurrentPass456!'),
+    ]);
 
-  expect([first.status, second.status].sort()).toEqual([200, 400]);
-});
+    expect([first.status, second.status].sort()).toEqual([200, 400]);
+  });
 
   it('rejects invalid and expired reset tokens safely', async () => {
     await register('expired-reset', UserRole.TENANT).expect(201);
@@ -305,6 +310,197 @@ describe('Hira API (e2e)', () => {
   it('applies registration password validation to password reset', () =>
     resetPassword('any-token', 'short').expect(400));
 
+  it('reads and atomically updates a tenant profile with derived verification', async () => {
+    const agent = await authenticatedAgent('profile-tenant', UserRole.TENANT);
+    const initial = await agent.get('/users/me').expect(200);
+    expect(getBody(initial)).toMatchObject({
+      email: email('profile-tenant'),
+      role: UserRole.TENANT,
+      phone: null,
+      contactMethod: null,
+      verificationStatus: 'NOT_SUBMITTED',
+      tenantProfile: { institution: null, expectedMoveIn: null },
+    });
+    expectNoSensitiveProfileFields(getBody(initial));
+
+    const updated = await agent
+      .patch('/users/me')
+      .send({
+        firstName: '  Mpho  ',
+        lastName: '  Student  ',
+        phone: '  +266 5000 0000  ',
+        contactMethod: '  WhatsApp  ',
+        institution: '  National University of Lesotho  ',
+        expectedMoveIn: '2026-09-15',
+      })
+      .expect(200);
+    expect(getBody(updated)).toMatchObject({
+      firstName: 'Mpho',
+      lastName: 'Student',
+      phone: '+266 5000 0000',
+      contactMethod: 'WhatsApp',
+      tenantProfile: {
+        institution: 'National University of Lesotho',
+        expectedMoveIn: '2026-09-15T00:00:00.000Z',
+      },
+    });
+
+    await agent
+      .patch('/users/me')
+      .send({ expectedMoveIn: '2026-09-15T12:30:00.000Z' })
+      .expect(400);
+
+    const clearedMoveIn = await agent
+      .patch('/users/me')
+      .send({ expectedMoveIn: null })
+      .expect(200);
+    expect(getBody(clearedMoveIn)).toMatchObject({
+      tenantProfile: { expectedMoveIn: null },
+    });
+
+    const partial = await agent
+      .patch('/users/me')
+      .send({ phone: null })
+      .expect(200);
+    expect(getBody(partial)).toMatchObject({
+      firstName: 'Mpho',
+      phone: null,
+      tenantProfile: { institution: 'National University of Lesotho' },
+    });
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: email('profile-tenant') },
+    });
+    await prisma.verification.createMany({
+      data: [
+        {
+          userId: user.id,
+          type: VerificationType.STUDENT,
+          documentKey: `e2e/${runId}/older-student-document`,
+          status: VerificationStatus.APPROVED,
+          createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        },
+        {
+          userId: user.id,
+          type: VerificationType.STUDENT,
+          documentKey: `e2e/${runId}/newer-student-document`,
+          status: VerificationStatus.REJECTED,
+          createdAt: new Date('2026-08-02T00:00:00.000Z'),
+        },
+      ],
+    });
+    const verified = await agent.get('/users/me').expect(200);
+    expect(getBody(verified).verificationStatus).toBe(
+      VerificationStatus.REJECTED,
+    );
+    expectNoSensitiveProfileFields(getBody(verified));
+  });
+
+  it('reads and updates only landlord profile fields', async () => {
+    const agent = await authenticatedAgent(
+      'profile-landlord',
+      UserRole.LANDLORD,
+    );
+    const updated = await agent
+      .patch('/users/me')
+      .send({
+        firstName: '  Lineo  ',
+        phone: '  +266 5111 1111 ',
+        organisation: '  Maseru Student Homes  ',
+        propertyCount: 4,
+      })
+      .expect(200);
+
+    expect(getBody(updated)).toMatchObject({
+      firstName: 'Lineo',
+      phone: '+266 5111 1111',
+      role: UserRole.LANDLORD,
+      verificationStatus: 'NOT_SUBMITTED',
+      landlordProfile: {
+        organisation: 'Maseru Student Homes',
+        propertyCount: 4,
+      },
+    });
+    expect(getBody(updated)).not.toHaveProperty('tenantProfile');
+    expectNoSensitiveProfileFields(getBody(updated));
+  });
+
+  it('returns only common safe fields for an admin profile', async () => {
+    await prisma.user.create({
+      data: {
+        email: email('profile-admin'),
+        firstName: 'Hira',
+        lastName: 'Admin',
+        passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
+        role: UserRole.ADMIN,
+      },
+    });
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/auth/login')
+      .send({ email: email('profile-admin'), password })
+      .expect(200);
+    const response = await agent.get('/users/me').expect(200);
+
+    expect(getBody(response)).toMatchObject({ role: UserRole.ADMIN });
+    expect(getBody(response)).not.toHaveProperty('tenantProfile');
+    expect(getBody(response)).not.toHaveProperty('landlordProfile');
+    expect(getBody(response)).not.toHaveProperty('verificationStatus');
+    expectNoSensitiveProfileFields(getBody(response));
+  });
+
+  it('rejects invalid and role-incompatible profile fields', async () => {
+    const tenant = await authenticatedAgent(
+      'profile-rules-tenant',
+      UserRole.TENANT,
+    );
+    const landlord = await authenticatedAgent(
+      'profile-rules-landlord',
+      UserRole.LANDLORD,
+    );
+
+    await tenant.patch('/users/me').send({ firstName: '   ' }).expect(400);
+    await landlord.patch('/users/me').send({ propertyCount: -1 }).expect(400);
+    await tenant
+      .patch('/users/me')
+      .send({ organisation: 'Not allowed' })
+      .expect(400);
+    await landlord
+      .patch('/users/me')
+      .send({ institution: 'Not allowed' })
+      .expect(400);
+
+    for (const forbidden of [
+      { email: 'changed@example.com' },
+      { role: UserRole.ADMIN },
+      { status: UserStatus.SUSPENDED },
+      { authVersion: 99 },
+      { verificationStatus: VerificationStatus.APPROVED },
+    ]) {
+      await tenant.patch('/users/me').send(forbidden).expect(400);
+    }
+  });
+
+  it('rejects unauthenticated profile updates and cannot target another user', async () => {
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .send({ firstName: 'Blocked' })
+      .expect(401);
+
+    const owner = await authenticatedAgent('profile-owner', UserRole.TENANT);
+    await register('profile-other', UserRole.TENANT).expect(201);
+    const other = await prisma.user.findUniqueOrThrow({
+      where: { email: email('profile-other') },
+    });
+    await owner
+      .patch('/users/me')
+      .send({ id: other.id, firstName: 'Cannot target another user' })
+      .expect(400);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: other.id } }),
+    ).toMatchObject({ firstName: 'Hira' });
+  });
+
   function registration(accountEmail: string, role: UserRole) {
     return {
       firstName: 'Hira',
@@ -319,6 +515,16 @@ describe('Hira API (e2e)', () => {
     return request(app.getHttpServer())
       .post('/auth/register')
       .send(registration(email(name), role));
+  }
+
+  async function authenticatedAgent(name: string, role: UserRole) {
+    await register(name, role).expect(201);
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/auth/login')
+      .send({ email: email(name), password })
+      .expect(200);
+    return agent;
   }
 
   function forgotPassword(accountEmail: string) {
@@ -346,6 +552,13 @@ describe('Hira API (e2e)', () => {
   function expectSafeUser(body: Record<string, unknown>, role: UserRole) {
     expect(body).toMatchObject({ role, status: UserStatus.ACTIVE });
     expect(body).not.toHaveProperty('passwordHash');
+  }
+
+  function expectNoSensitiveProfileFields(body: Record<string, unknown>) {
+    expect(body).not.toHaveProperty('passwordHash');
+    expect(body).not.toHaveProperty('authVersion');
+    expect(body).not.toHaveProperty('passwordResetTokens');
+    expect(JSON.stringify(body)).not.toContain('documentKey');
   }
 
   function getBody(response: request.Response): Record<string, unknown> {
