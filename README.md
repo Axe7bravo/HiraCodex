@@ -28,6 +28,14 @@ Invoke-RestMethod http://localhost:4000/health
 pnpm --dir apps/api exec prisma migrate status
 ```
 
+Seed or reset the deterministic local marketplace fixtures manually:
+
+```powershell
+pnpm --filter api seed:dev
+```
+
+This command owns only the fixed development marketplace records and their local card images. It refuses production and S3-backed execution; it does not run automatically during application startup.
+
 Run all project checks:
 
 ```powershell

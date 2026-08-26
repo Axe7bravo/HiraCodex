@@ -7,6 +7,7 @@ export function SiteHeader() {
         Hira<span>.</span>
       </Link>
       <nav aria-label="Account navigation">
+        <Link href="/properties">Find housing</Link>
         <Link href="/login">Sign in</Link>
         <Link className="button button-small" href="/register">
           Create account

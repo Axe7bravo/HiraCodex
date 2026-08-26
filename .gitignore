@@ -20,3 +20,4 @@ Thumbs.db
 # Logs
 *.log
 **/.private-verification-uploads/
+**/.private-property-photos/

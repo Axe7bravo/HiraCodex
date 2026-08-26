@@ -160,6 +160,30 @@ export type AdminPropertyDetail = LandlordProperty & {
   } | null;
 };
 
+export type DiscoveryProperty = {
+  id: string;
+  title: string;
+  monthlyPrice: string;
+  roomType: string;
+  availableFrom: string;
+  amenities: string[];
+  country: string;
+  city: string;
+  area: string;
+  nearestInstitution: string;
+  distanceNote: string | null;
+  createdAt: string;
+  photos: Pick<PropertyPhoto, "id" | "mimeType" | "sortOrder">[];
+};
+
+export type DiscoveryPage = {
+  items: DiscoveryProperty[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
