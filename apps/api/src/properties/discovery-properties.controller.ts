@@ -12,6 +12,11 @@ export class DiscoveryPropertiesController {
     return this.properties.list(query);
   }
 
+  @Get(':id')
+  detail(@Param('id') id: string) {
+    return this.properties.getDetail(id);
+  }
+
   @Get(':propertyId/photos/:photoId')
   @Header(
     'Cache-Control',

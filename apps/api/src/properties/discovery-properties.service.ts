@@ -6,7 +6,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PropertyStatus } from '@prisma/client';
+import {
+  Prisma,
+  PropertyStatus,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DiscoverPropertiesDto,
@@ -15,7 +20,7 @@ import {
 import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
 import type { PropertyPhotoStorage } from './property-photo-storage';
 
-const discoveryPropertySelect = {
+export const publicPropertyCardSelect = {
   id: true,
   title: true,
   monthlyPrice: true,
@@ -35,6 +40,42 @@ const discoveryPropertySelect = {
   },
 } satisfies Prisma.PropertySelect;
 
+const publicPropertyDetailSelect = {
+  id: true,
+  title: true,
+  description: true,
+  monthlyPrice: true,
+  roomType: true,
+  availableFrom: true,
+  amenities: true,
+  country: true,
+  city: true,
+  area: true,
+  nearestInstitution: true,
+  distanceNote: true,
+  createdAt: true,
+  updatedAt: true,
+  photos: {
+    select: { id: true, mimeType: true, sortOrder: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
+  landlord: {
+    select: {
+      firstName: true,
+      lastName: true,
+      landlordProfile: { select: { organisation: true } },
+      verifications: {
+        where: {
+          type: VerificationType.LANDLORD,
+          status: VerificationStatus.APPROVED,
+        },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  },
+} satisfies Prisma.PropertySelect;
+
 @Injectable()
 export class DiscoveryPropertiesService {
   private readonly logger = new Logger(DiscoveryPropertiesService.name);
@@ -50,7 +91,7 @@ export class DiscoveryPropertiesService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.property.findMany({
         where,
-        select: discoveryPropertySelect,
+        select: publicPropertyCardSelect,
         orderBy: this.orderBy(query.sort),
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
@@ -64,6 +105,25 @@ export class DiscoveryPropertiesService {
       pageSize: query.pageSize,
       total,
       totalPages: Math.ceil(total / query.pageSize),
+    };
+  }
+
+  async getDetail(id: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, status: PropertyStatus.ACTIVE },
+      select: publicPropertyDetailSelect,
+    });
+    if (!property) throw new NotFoundException('Property not found');
+
+    const { landlord, ...detail } = property;
+    return {
+      ...detail,
+      landlord: {
+        firstName: landlord.firstName,
+        lastName: landlord.lastName,
+        organisation: landlord.landlordProfile?.organisation ?? null,
+        verified: landlord.verifications.length > 0,
+      },
     };
   }
 

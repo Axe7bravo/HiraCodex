@@ -184,6 +184,24 @@ export type DiscoveryPage = {
   totalPages: number;
 };
 
+export type PublicPropertyDetail = Omit<DiscoveryProperty, "photos"> & {
+  description: string;
+  updatedAt: string;
+  photos: Pick<PropertyPhoto, "id" | "mimeType" | "sortOrder">[];
+  landlord: {
+    firstName: string;
+    lastName: string;
+    organisation: string | null;
+    verified: boolean;
+  };
+};
+
+export type FavouriteItem = {
+  propertyId: string;
+  createdAt: string;
+  property: DiscoveryProperty;
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},

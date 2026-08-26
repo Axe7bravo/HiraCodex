@@ -3,11 +3,24 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PropertyStatus } from '@prisma/client';
+import {
+  Prisma,
+  PropertyStatus,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
 import { DiscoveryPropertiesService } from './discovery-properties.service';
 
 describe('DiscoveryPropertiesService', () => {
-  const property = { findMany: jest.fn(), count: jest.fn() };
+  const findFirstMock = jest.fn<
+    Promise<unknown>,
+    [Prisma.PropertyFindFirstArgs]
+  >();
+  const property = {
+    findMany: jest.fn(),
+    findFirst: findFirstMock,
+    count: jest.fn(),
+  };
   const propertyPhoto = { findFirst: jest.fn() };
   const prisma = {
     property,
@@ -61,6 +74,76 @@ describe('DiscoveryPropertiesService', () => {
       skip: 0,
       take: 12,
     });
+  });
+
+  it('returns a safe ACTIVE property detail and mapped landlord summary', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'property-1',
+      title: 'Roma room',
+      description: 'A complete public description.',
+      landlord: {
+        firstName: 'Mpho',
+        lastName: 'Mokoena',
+        landlordProfile: { organisation: 'Mokoena Rooms' },
+        verifications: [{ id: 'verification-1' }],
+      },
+      photos: [],
+    });
+
+    await expect(service.getDetail('property-1')).resolves.toMatchObject({
+      id: 'property-1',
+      landlord: {
+        firstName: 'Mpho',
+        lastName: 'Mokoena',
+        organisation: 'Mokoena Rooms',
+        verified: true,
+      },
+    });
+    expect(findFirstMock).toHaveBeenCalledWith({
+      where: { id: 'property-1', status: PropertyStatus.ACTIVE },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        monthlyPrice: true,
+        roomType: true,
+        availableFrom: true,
+        amenities: true,
+        country: true,
+        city: true,
+        area: true,
+        nearestInstitution: true,
+        distanceNote: true,
+        createdAt: true,
+        updatedAt: true,
+        photos: {
+          select: { id: true, mimeType: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+        landlord: {
+          select: {
+            firstName: true,
+            lastName: true,
+            landlordProfile: { select: { organisation: true } },
+            verifications: {
+              where: {
+                type: VerificationType.LANDLORD,
+                status: VerificationStatus.APPROVED,
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('does not publicly retrieve a nonexistent or non-ACTIVE property', async () => {
+    findFirstMock.mockResolvedValue(null);
+    await expect(service.getDetail('private-property')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('combines every documented filter and applies deterministic price sort', async () => {

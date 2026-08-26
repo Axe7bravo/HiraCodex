@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ApiError,
@@ -257,7 +258,9 @@ function PropertyCard({ property }: { property: DiscoveryProperty }) {
         <strong>Approved listing</strong>
       </div>
       <div className="card-body">
-        <h3>{property.title}</h3>
+        <h3>
+          <Link href={`/properties/${property.id}`}>{property.title}</Link>
+        </h3>
         <p className="card-location">
           {property.area}, {property.city}
         </p>
@@ -275,6 +278,9 @@ function PropertyCard({ property }: { property: DiscoveryProperty }) {
             <li key={amenity}>{amenity}</li>
           ))}
         </ul>
+        <Link className="card-detail-link" href={`/properties/${property.id}`}>
+          View property
+        </Link>
       </div>
     </article>
   );
