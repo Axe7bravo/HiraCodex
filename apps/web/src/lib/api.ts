@@ -90,6 +90,32 @@ export type AdminVerificationDetail = Omit<
   reviewedBy: Pick<SafeUser, "id" | "firstName" | "lastName" | "email"> | null;
 };
 
+export type PropertyStatus =
+  "DRAFT" | "PENDING_REVIEW" | "ACTIVE" | "REJECTED" | "PAUSED" | "INACTIVE";
+
+export type LandlordProperty = {
+  id: string;
+  landlordId: string;
+  title: string;
+  description: string;
+  monthlyPrice: string;
+  roomType: string;
+  status: PropertyStatus;
+  availableFrom: string;
+  amenities: string[];
+  country: string;
+  city: string;
+  area: string;
+  nearestInstitution: string;
+  distanceNote: string | null;
+  fullAddress: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},

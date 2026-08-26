@@ -519,6 +519,71 @@ dd {
   background: var(--danger);
   color: white;
 }
+.property-shell {
+  max-width: 62rem;
+}
+.property-management {
+  display: grid;
+  gap: 1.5rem;
+}
+.property-empty,
+.location-note {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.location-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.landlord-property-list {
+  display: grid;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+.landlord-property-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+}
+.landlord-property-list h2 {
+  margin: 0.45rem 0 0.25rem;
+  font-size: 1.15rem;
+}
+.property-status {
+  display: inline-flex;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.status-paused {
+  background: var(--surface);
+  color: var(--muted);
+}
+.property-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.button-small {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.8rem;
+}
+.property-form textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
 
 @media (max-width: 760px) {
   .site-header nav > a:first-child {
@@ -548,6 +613,12 @@ dd {
   .field-row,
   .role-picker {
     grid-template-columns: 1fr;
+  }
+  .profile-heading,
+  .landlord-property-list li,
+  .location-note {
+    align-items: stretch;
+    flex-direction: column;
   }
   .role-option {
     min-height: 6.4rem;

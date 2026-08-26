@@ -152,6 +152,12 @@ export function AccountClient() {
         </Link>
       )}
 
+      {profile.role === "LANDLORD" && (
+        <Link className="button button-outline" href="/account/properties">
+          Manage properties
+        </Link>
+      )}
+
       <form className="auth-form profile-form" onSubmit={save}>
         <div className="field-row">
           <ProfileInput
