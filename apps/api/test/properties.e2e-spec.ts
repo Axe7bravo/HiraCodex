@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { UserRole } from '@prisma/client';
+import { PropertyStatus, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -9,18 +9,20 @@ import { configureApp } from '../src/app.setup';
 import { EmailService } from '../src/auth/email.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PROPERTY_PHOTO_STORAGE } from '../src/properties/property-photo-storage';
+import { AdminPropertiesService } from '../src/properties/admin-properties.service';
 import { VERIFICATION_DOCUMENT_STORAGE } from '../src/verifications/verification-document-storage';
 
 process.env.JWT_SECRET ??=
   'hira-property-e2e-secret-longer-than-thirty-two-characters';
 
 describe('Landlord property management (e2e)', () => {
-  jest.setTimeout(60_000);
+  jest.setTimeout(120_000);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const email = (name: string) => `property-${runId}-${name}@example.com`;
   const password = 'SecurePass123!';
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let adminProperties: AdminPropertiesService;
   const storedPhotos = new Map<string, Buffer>();
   const propertyStorage = {
     put: jest.fn((key: string, contents: Buffer) => {
@@ -43,6 +45,8 @@ describe('Landlord property management (e2e)', () => {
         sendPasswordReset: jest.fn(),
         sendVerificationApproved: jest.fn(),
         sendVerificationRejected: jest.fn(),
+        sendPropertyApproved: jest.fn(),
+        sendPropertyRejected: jest.fn(),
       })
       .overrideProvider(VERIFICATION_DOCUMENT_STORAGE)
       .useValue({ put: jest.fn(), get: jest.fn(), delete: jest.fn() })
@@ -50,12 +54,16 @@ describe('Landlord property management (e2e)', () => {
       .useValue(propertyStorage)
       .compile();
     prisma = module.get(PrismaService);
+    adminProperties = module.get(AdminPropertiesService);
     app = module.createNestApplication();
     configureApp(app);
     await app.init();
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({
+      where: { actor: { email: { startsWith: `property-${runId}-` } } },
+    });
     await prisma.inquiry.deleteMany({
       where: { tenant: { email: { startsWith: `property-${runId}-` } } },
     });
@@ -66,6 +74,157 @@ describe('Landlord property management (e2e)', () => {
       where: { email: { startsWith: `property-${runId}-` } },
     });
     await app.close();
+  });
+
+  it('authorizes admin moderation and resolves concurrent review once', async () => {
+    const owner = await authenticatedAgent(
+      'moderation-owner',
+      UserRole.LANDLORD,
+    );
+    const created = await owner
+      .post('/properties')
+      .send(validProperty('Concurrent review'))
+      .expect(201);
+    const propertyId = getBody<PropertyBody>(created).id;
+    for (const { name, contents } of validPhotos()) {
+      await owner
+        .post(`/properties/${propertyId}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await owner.post(`/properties/${propertyId}/submit-review`).expect(201);
+
+    await owner.get('/admin/properties').expect(403);
+    const firstAdmin = await authenticatedAdminAgent('property-admin-one');
+    const secondAdmin = await authenticatedAdminAgent('property-admin-two');
+    const queue = await firstAdmin.get('/admin/properties').expect(200);
+    expect(JSON.stringify(queue.body)).not.toContain('objectKey');
+    const detail = await firstAdmin
+      .get(`/admin/properties/${propertyId}`)
+      .expect(200);
+    expect(JSON.stringify(detail.body)).not.toContain('objectKey');
+    const photoId = getBody<{ photos: { id: string }[] }>(detail).photos[0].id;
+    await firstAdmin
+      .get(`/admin/properties/${propertyId}/photos/${photoId}`)
+      .expect(200);
+    await firstAdmin
+      .get(`/admin/properties/not-${propertyId}/photos/${photoId}`)
+      .expect(404);
+
+    const decisions = await Promise.all([
+      firstAdmin
+        .patch(`/admin/properties/${propertyId}`)
+        .send({ status: 'ACTIVE' }),
+      secondAdmin
+        .patch(`/admin/properties/${propertyId}`)
+        .send({ status: 'REJECTED', rejectionReason: 'Needs changes.' }),
+    ]);
+    expect(decisions.map(({ status }) => status).sort()).toEqual([200, 409]);
+    expect(
+      await prisma.auditLog.count({
+        where: { targetType: 'Property', targetId: propertyId },
+      }),
+    ).toBe(1);
+    expect(
+      (await prisma.property.findUniqueOrThrow({ where: { id: propertyId } }))
+        .status,
+    ).toBe(
+      getBody<{ status: PropertyStatus }>(
+        decisions.find(({ status }) => status === 200)!,
+      ).status,
+    );
+  });
+
+  it('rolls back a decision when audit creation fails', async () => {
+    const owner = await authenticatedAgent('audit-owner', UserRole.LANDLORD);
+    const created = await owner
+      .post('/properties')
+      .send(validProperty('Audit rollback'))
+      .expect(201);
+    const propertyId = getBody<PropertyBody>(created).id;
+    for (const { name, contents } of validPhotos()) {
+      await owner
+        .post(`/properties/${propertyId}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await owner.post(`/properties/${propertyId}/submit-review`).expect(201);
+
+    await expect(
+      adminProperties.review(propertyId, 'missing-admin', {
+        status: PropertyStatus.ACTIVE,
+      }),
+    ).rejects.toThrow();
+    expect(
+      (await prisma.property.findUniqueOrThrow({ where: { id: propertyId } }))
+        .status,
+    ).toBe(PropertyStatus.PENDING_REVIEW);
+    expect(
+      await prisma.auditLog.count({
+        where: { targetType: 'Property', targetId: propertyId },
+      }),
+    ).toBe(0);
+  });
+
+  it('lets a landlord correct and resubmit a rejected property', async () => {
+    const owner = await authenticatedAgent('rejected-owner', UserRole.LANDLORD);
+    const admin = await authenticatedAdminAgent('rejecting-admin');
+    const created = await owner
+      .post('/properties')
+      .send(validProperty('Needs review'))
+      .expect(201);
+    const propertyId = getBody<PropertyBody>(created).id;
+    for (const { name, contents } of validPhotos()) {
+      await owner
+        .post(`/properties/${propertyId}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await owner.post(`/properties/${propertyId}/submit-review`).expect(201);
+    await admin
+      .patch(`/admin/properties/${propertyId}`)
+      .send({
+        status: 'REJECTED',
+        rejectionReason: 'Add a more specific description.',
+      })
+      .expect(200);
+
+    const mine = await owner.get('/properties/mine').expect(200);
+    const rejected = getBody<PropertyBody[]>(mine).find(
+      ({ id }) => id === propertyId,
+    );
+    expect(rejected).toMatchObject({
+      status: 'REJECTED',
+      rejectionReason: 'Add a more specific description.',
+    });
+    const corrected = await owner
+      .patch(`/properties/${propertyId}`)
+      .send({
+        description:
+          'A corrected and more specific description for this furnished room.',
+      })
+      .expect(200);
+    expect(getBody<PropertyBody>(corrected)).toMatchObject({
+      status: 'REJECTED',
+      rejectionReason: 'Add a more specific description.',
+    });
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ status: 'DRAFT' })
+      .expect(409);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ status: 'PAUSED' })
+      .expect(409);
+    await owner
+      .post(`/properties/${propertyId}/submit-review`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          status: 'PENDING_REVIEW',
+          rejectionReason: null,
+        });
+      });
   });
 
   it('enforces authentication and the LANDLORD role', async () => {

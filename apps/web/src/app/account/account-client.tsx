@@ -158,6 +158,17 @@ export function AccountClient() {
         </Link>
       )}
 
+      {profile.role === "ADMIN" && (
+        <div className="property-actions">
+          <Link className="button button-outline" href="/admin/verifications">
+            Review verifications
+          </Link>
+          <Link className="button button-outline" href="/admin/properties">
+            Review properties
+          </Link>
+        </div>
+      )}
+
       <form className="auth-form profile-form" onSubmit={save}>
         <div className="field-row">
           <ProfileInput

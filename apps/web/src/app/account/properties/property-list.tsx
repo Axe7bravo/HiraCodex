@@ -120,8 +120,7 @@ export function PropertyList() {
                 </small>
               </div>
               <div className="property-actions">
-                {(property.status === "DRAFT" ||
-                  property.status === "PAUSED") && (
+                {isEditable(property.status) && (
                   <Link
                     className="button button-outline button-small"
                     href={`/account/properties/${property.id}/edit`}
@@ -139,8 +138,7 @@ export function PropertyList() {
                     {property.status === "PAUSED" ? "Return to draft" : "Pause"}
                   </button>
                 )}
-                {(property.status === "DRAFT" ||
-                  property.status === "PAUSED") && (
+                {isEditable(property.status) && (
                   <button
                     className="button button-danger button-small"
                     disabled={busyId === property.id}
@@ -168,4 +166,8 @@ function statusLabel(status: LandlordProperty["status"]): string {
     REJECTED: "Rejected",
     INACTIVE: "Inactive",
   }[status];
+}
+
+function isEditable(status: LandlordProperty["status"]): boolean {
+  return status === "DRAFT" || status === "PAUSED" || status === "REJECTED";
 }

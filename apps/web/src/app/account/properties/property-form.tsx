@@ -122,6 +122,11 @@ export function PropertyForm({ propertyId }: { propertyId?: string }) {
             {property.status.replaceAll("_", " ")}
           </span>
         )}
+        {property?.status === "REJECTED" && property.rejectionReason && (
+          <p className="form-error">
+            Review feedback: {property.rejectionReason}
+          </p>
+        )}
       </div>
       {error && !form.title && propertyId ? (
         <p className="form-error" role="alert">
@@ -236,8 +241,8 @@ export function PropertyForm({ propertyId }: { propertyId?: string }) {
             )}
             {saved && (
               <p className="form-success" role="status">
-                Property saved as{" "}
-                {saved.status === "PAUSED" ? "paused" : "a draft"}.
+                Property changes saved. Current status:{" "}
+                {saved.status.replaceAll("_", " ")}.
               </p>
             )}
             <button className="button" disabled={saving} type="submit">
@@ -413,7 +418,11 @@ function PhotoManager({
 }
 
 function isEditable(property: LandlordProperty) {
-  return property.status === "DRAFT" || property.status === "PAUSED";
+  return (
+    property.status === "DRAFT" ||
+    property.status === "PAUSED" ||
+    property.status === "REJECTED"
+  );
 }
 
 async function loadProperty(propertyId: string) {

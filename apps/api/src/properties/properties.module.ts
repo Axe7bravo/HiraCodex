@@ -8,12 +8,15 @@ import { PropertiesService } from './properties.service';
 import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
 import { LocalPropertyPhotoStorage } from './local-property-photo.storage';
 import { S3PropertyPhotoStorage } from './s3-property-photo.storage';
+import { AdminPropertiesController } from './admin-properties.controller';
+import { AdminPropertiesService } from './admin-properties.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [PropertiesController],
+  controllers: [PropertiesController, AdminPropertiesController],
   providers: [
     PropertiesService,
+    AdminPropertiesService,
     {
       provide: PROPERTY_PHOTO_STORAGE,
       inject: [ConfigService],

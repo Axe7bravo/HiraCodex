@@ -33,7 +33,7 @@ describe("PropertyForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save property" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Property saved as a draft",
+      "Property changes saved. Current status: DRAFT",
     );
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localhost:4000/properties");

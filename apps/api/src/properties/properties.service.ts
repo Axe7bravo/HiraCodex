@@ -39,6 +39,11 @@ const safePhotoSelect = {
 const manageableStatuses: PropertyStatus[] = [
   PropertyStatus.DRAFT,
   PropertyStatus.PAUSED,
+  PropertyStatus.REJECTED,
+];
+const landlordStatusChangeSourceStatuses: PropertyStatus[] = [
+  PropertyStatus.DRAFT,
+  PropertyStatus.PAUSED,
 ];
 type CreatePropertyData = Omit<
   Prisma.PropertyUncheckedCreateInput,
@@ -82,12 +87,24 @@ export class PropertiesService {
     if (Object.keys(input).length === 0) {
       throw new BadRequestException('At least one property field is required');
     }
-    await this.requireManageableProperty(id, landlordId);
+    const property = await this.requireManageableProperty(id, landlordId);
+    if (
+      property.status === PropertyStatus.REJECTED &&
+      input.status !== undefined
+    ) {
+      throw new ConflictException(
+        'Rejected properties remain rejected until they are resubmitted',
+      );
+    }
+    const mutationStatuses =
+      input.status === undefined
+        ? manageableStatuses
+        : landlordStatusChangeSourceStatuses;
     const updated = await this.prisma.property.updateMany({
       where: {
         id,
         landlordId,
-        status: { in: manageableStatuses },
+        status: { in: mutationStatuses },
       },
       data: this.propertyData(input),
     });
@@ -326,7 +343,7 @@ export class PropertiesService {
     if (!property) throw new NotFoundException('Property not found');
     if (!manageableStatuses.includes(property.status)) {
       throw new ConflictException(
-        'Only draft or paused properties can be managed in this milestone',
+        'Only draft, paused, or rejected properties can be managed',
       );
     }
     return property;
@@ -343,7 +360,7 @@ export class PropertiesService {
     });
     if (!property) throw new NotFoundException('Property not found');
     throw new ConflictException(
-      'Only draft or paused properties can be managed in this milestone',
+      'Only draft, paused, or rejected properties can be managed',
     );
   }
 

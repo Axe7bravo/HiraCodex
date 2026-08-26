@@ -39,6 +39,22 @@ export class EmailService {
     );
   }
 
+  sendPropertyApproved(to: string): Promise<void> {
+    return this.send(
+      to,
+      'Your Hira property listing is approved',
+      'Your property listing has been approved and is now active on Hira.',
+    );
+  }
+
+  sendPropertyRejected(to: string, reason: string): Promise<void> {
+    return this.send(
+      to,
+      'Action needed for your Hira property listing',
+      `Your property listing needs changes before approval. Reason: ${reason}\n\nYou may edit the listing and submit it for review again.`,
+    );
+  }
+
   private async send(to: string, subject: string, text: string): Promise<void> {
     const apiKey = this.config.getOrThrow<string>('RESEND_API_KEY');
     const from = this.config.getOrThrow<string>('EMAIL_FROM');

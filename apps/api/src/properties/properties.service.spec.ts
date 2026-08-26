@@ -93,11 +93,64 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
-        status: { in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED] },
+        status: {
+          in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED],
+        },
       },
       data: { status: PropertyStatus.PAUSED },
     });
   });
+
+  it('updates rejected property content without changing its status', async () => {
+    property.findFirst.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.REJECTED,
+    });
+    property.updateMany.mockResolvedValue({ count: 1 });
+    property.findUniqueOrThrow.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.REJECTED,
+      rejectionReason: 'Add more detail.',
+      title: 'Corrected listing title',
+    });
+
+    await expect(
+      service.update('property-1', 'landlord-1', {
+        title: 'Corrected listing title',
+      }),
+    ).resolves.toMatchObject({ status: PropertyStatus.REJECTED });
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'property-1',
+        landlordId: 'landlord-1',
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
+      },
+      data: { title: 'Corrected listing title' },
+    });
+  });
+
+  it.each([PropertyStatus.DRAFT, PropertyStatus.PAUSED])(
+    'rejects a rejected property status change to %s',
+    async (status) => {
+      property.findFirst.mockResolvedValue({
+        id: 'property-1',
+        status: PropertyStatus.REJECTED,
+      });
+
+      await expect(
+        service.update('property-1', 'landlord-1', { status }),
+      ).rejects.toThrow(
+        'Rejected properties remain rejected until they are resubmitted',
+      );
+      expect(property.updateMany).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not reveal a property owned by another landlord', async () => {
     property.findFirst.mockResolvedValue(null);
@@ -120,7 +173,13 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
-        status: { in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED] },
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
       },
       data: { title: 'Stale edit' },
     });
@@ -174,7 +233,13 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
-        status: { in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED] },
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
       },
     });
     expect(storage.delete).not.toHaveBeenCalled();
@@ -196,7 +261,13 @@ describe('PropertiesService', () => {
         propertyId: 'property-1',
         property: {
           landlordId: 'landlord-1',
-          status: { in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED] },
+          status: {
+            in: [
+              PropertyStatus.DRAFT,
+              PropertyStatus.PAUSED,
+              PropertyStatus.REJECTED,
+            ],
+          },
         },
       },
     });
@@ -269,9 +340,9 @@ describe('PropertiesService', () => {
     expect(storage.delete).toHaveBeenCalledTimes(1);
   });
 
-  it('submits an editable property with three photos for review', async () => {
+  it('resubmits a rejected property and clears its rejection reason', async () => {
     property.findFirst.mockResolvedValue({
-      status: PropertyStatus.DRAFT,
+      status: PropertyStatus.REJECTED,
       _count: { photos: 3 },
     });
     property.updateMany.mockResolvedValue({ count: 1 });
@@ -285,7 +356,13 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
-        status: { in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED] },
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
       },
       data: {
         status: PropertyStatus.PENDING_REVIEW,

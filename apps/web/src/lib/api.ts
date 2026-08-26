@@ -126,6 +126,40 @@ export type PropertyPhoto = {
   createdAt: string;
 };
 
+export type AdminPropertyLandlord = Pick<
+  SafeUser,
+  "id" | "firstName" | "lastName" | "email"
+> & {
+  phone: string | null;
+  contactMethod: string | null;
+  landlordProfile: {
+    organisation: string | null;
+    propertyCount: number | null;
+  } | null;
+};
+
+export type AdminPropertyQueueItem = {
+  id: string;
+  title: string;
+  monthlyPrice: string;
+  status: "PENDING_REVIEW";
+  country: string;
+  city: string;
+  area: string;
+  submittedAt: string;
+  photoCount: number;
+  landlord: AdminPropertyLandlord;
+};
+
+export type AdminPropertyDetail = LandlordProperty & {
+  landlord: AdminPropertyLandlord;
+  review: {
+    action: "PROPERTY_APPROVED" | "PROPERTY_REJECTED";
+    createdAt: string;
+    actor: Pick<SafeUser, "id" | "firstName" | "lastName" | "email">;
+  } | null;
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
