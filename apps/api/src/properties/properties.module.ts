@@ -1,11 +1,46 @@
+import { S3Client } from '@aws-sdk/client-s3';
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { resolve } from 'node:path';
 import { AuthModule } from '../auth/auth.module';
 import { PropertiesController } from './properties.controller';
 import { PropertiesService } from './properties.service';
+import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
+import { LocalPropertyPhotoStorage } from './local-property-photo.storage';
+import { S3PropertyPhotoStorage } from './s3-property-photo.storage';
 
 @Module({
   imports: [AuthModule],
   controllers: [PropertiesController],
-  providers: [PropertiesService],
+  providers: [
+    PropertiesService,
+    {
+      provide: PROPERTY_PHOTO_STORAGE,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        if (config.get<string>('PROPERTY_STORAGE_DRIVER') === 's3') {
+          return new S3PropertyPhotoStorage(
+            new S3Client({
+              endpoint: config.get<string>('PROPERTY_S3_ENDPOINT'),
+              region: config.get<string>('PROPERTY_S3_REGION') ?? 'auto',
+              credentials: {
+                accessKeyId: config.getOrThrow<string>(
+                  'PROPERTY_S3_ACCESS_KEY_ID',
+                ),
+                secretAccessKey: config.getOrThrow<string>(
+                  'PROPERTY_S3_SECRET_ACCESS_KEY',
+                ),
+              },
+            }),
+            config.getOrThrow<string>('PROPERTY_S3_BUCKET'),
+          );
+        }
+        return new LocalPropertyPhotoStorage(
+          config.get<string>('PROPERTY_LOCAL_STORAGE_DIR') ??
+            resolve(process.cwd(), '.private-property-photos'),
+        );
+      },
+    },
+  ],
 })
 export class PropertiesModule {}

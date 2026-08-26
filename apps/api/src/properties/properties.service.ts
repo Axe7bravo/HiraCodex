@@ -1,13 +1,40 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, PropertyStatus } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
+import type { PropertyPhotoStorage } from './property-photo-storage';
+
+export const ALLOWED_PROPERTY_PHOTO_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+export const MAX_PROPERTY_PHOTO_SIZE = 5 * 1024 * 1024;
+export const MIN_PROPERTY_PHOTOS = 3;
+export const MAX_PROPERTY_PHOTOS = 10;
+export type PropertyPhotoUpload = Pick<
+  Express.Multer.File,
+  'buffer' | 'mimetype' | 'originalname' | 'size'
+>;
+
+const safePhotoSelect = {
+  id: true,
+  originalName: true,
+  mimeType: true,
+  sizeBytes: true,
+  sortOrder: true,
+  createdAt: true,
+} satisfies Prisma.PropertyPhotoSelect;
 
 const manageableStatuses: PropertyStatus[] = [
   PropertyStatus.DRAFT,
@@ -20,11 +47,20 @@ type CreatePropertyData = Omit<
 
 @Injectable()
 export class PropertiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PropertiesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(PROPERTY_PHOTO_STORAGE)
+    private readonly storage: PropertyPhotoStorage,
+  ) {}
 
   mine(landlordId: string) {
     return this.prisma.property.findMany({
       where: { landlordId },
+      include: {
+        photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
+      },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
   }
@@ -36,6 +72,9 @@ export class PropertiesService {
         ...this.propertyData(input),
         status: PropertyStatus.DRAFT,
       },
+      include: {
+        photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
+      },
     });
   }
 
@@ -44,16 +83,59 @@ export class PropertiesService {
       throw new BadRequestException('At least one property field is required');
     }
     await this.requireManageableProperty(id, landlordId);
-    return this.prisma.property.update({
-      where: { id },
+    const updated = await this.prisma.property.updateMany({
+      where: {
+        id,
+        landlordId,
+        status: { in: manageableStatuses },
+      },
       data: this.propertyData(input),
+    });
+    if (updated.count !== 1) {
+      await this.throwPropertyMutationFailure(this.prisma, id, landlordId);
+    }
+    return this.prisma.property.findUniqueOrThrow({
+      where: { id },
+      include: {
+        photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
+      },
     });
   }
 
   async remove(id: string, landlordId: string): Promise<void> {
     await this.requireManageableProperty(id, landlordId);
+    let objectKeys: string[];
     try {
-      await this.prisma.property.delete({ where: { id } });
+      objectKeys = await this.prisma.$transaction(
+        async (transaction) => {
+          const photos = await transaction.propertyPhoto.findMany({
+            where: {
+              propertyId: id,
+              property: {
+                landlordId,
+                status: { in: manageableStatuses },
+              },
+            },
+            select: { objectKey: true },
+          });
+          const deleted = await transaction.property.deleteMany({
+            where: {
+              id,
+              landlordId,
+              status: { in: manageableStatuses },
+            },
+          });
+          if (deleted.count !== 1) {
+            await this.throwPropertyMutationFailure(
+              transaction,
+              id,
+              landlordId,
+            );
+          }
+          return photos.map(({ objectKey }) => objectKey);
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -63,8 +145,177 @@ export class PropertiesService {
           'Properties with inquiry or accommodation request history cannot be deleted',
         );
       }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException('Property is no longer editable');
+      }
       throw error;
     }
+    await this.cleanup(objectKeys);
+  }
+
+  async addPhoto(id: string, landlordId: string, file: PropertyPhotoUpload) {
+    this.validatePhoto(file);
+    await this.requireManageableProperty(id, landlordId);
+    const objectKey = `properties/${id}/${randomUUID()}`;
+    const attemptedKeys = [objectKey];
+    try {
+      await this.storage.put(objectKey, file.buffer, file.mimetype);
+      return await this.prisma.$transaction(
+        async (transaction) => {
+          const property = await transaction.property.findFirst({
+            where: { id, landlordId, status: { in: manageableStatuses } },
+            select: { id: true },
+          });
+          if (!property)
+            throw new ConflictException('Property is no longer editable');
+          const count = await transaction.propertyPhoto.count({
+            where: { propertyId: id },
+          });
+          if (count >= MAX_PROPERTY_PHOTOS) {
+            throw new BadRequestException(
+              'A property may have at most 10 photos',
+            );
+          }
+          return transaction.propertyPhoto.create({
+            data: {
+              propertyId: id,
+              objectKey,
+              originalName: file.originalname,
+              mimeType: file.mimetype,
+              sizeBytes: file.size,
+              sortOrder: count,
+            },
+            select: safePhotoSelect,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      await this.cleanup(attemptedKeys);
+      throw error;
+    }
+  }
+
+  async getPhoto(id: string, photoId: string, landlordId: string) {
+    const photo = await this.prisma.propertyPhoto.findFirst({
+      where: { id: photoId, propertyId: id, property: { landlordId } },
+      select: { objectKey: true, mimeType: true },
+    });
+    if (!photo) throw new NotFoundException('Property photo not found');
+    return {
+      mimeType: photo.mimeType,
+      contents: await this.storage.get(photo.objectKey),
+    };
+  }
+
+  async deletePhoto(
+    id: string,
+    photoId: string,
+    landlordId: string,
+  ): Promise<void> {
+    await this.requireManageableProperty(id, landlordId);
+    let objectKey: string;
+    try {
+      objectKey = await this.prisma.$transaction(
+        async (transaction) => {
+          const photo = await transaction.propertyPhoto.findFirst({
+            where: {
+              id: photoId,
+              propertyId: id,
+              property: {
+                landlordId,
+                status: { in: manageableStatuses },
+              },
+            },
+            select: { objectKey: true },
+          });
+          if (!photo) {
+            await this.throwPropertyMutationFailure(
+              transaction,
+              id,
+              landlordId,
+            );
+            throw new NotFoundException('Property photo not found');
+          }
+          const deleted = await transaction.propertyPhoto.deleteMany({
+            where: {
+              id: photoId,
+              propertyId: id,
+              property: {
+                landlordId,
+                status: { in: manageableStatuses },
+              },
+            },
+          });
+          if (deleted.count !== 1) {
+            await this.throwPropertyMutationFailure(
+              transaction,
+              id,
+              landlordId,
+            );
+            throw new NotFoundException('Property photo not found');
+          }
+          return photo.objectKey;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException('Property is no longer editable');
+      }
+      throw error;
+    }
+    await this.cleanup([objectKey]);
+  }
+
+  async submitReview(id: string, landlordId: string) {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const property = await transaction.property.findFirst({
+          where: { id, landlordId },
+          select: { status: true, _count: { select: { photos: true } } },
+        });
+        if (!property) throw new NotFoundException('Property not found');
+        if (!manageableStatuses.includes(property.status)) {
+          throw new ConflictException(
+            'Property has already been submitted or is not editable',
+          );
+        }
+        if (
+          property._count.photos < MIN_PROPERTY_PHOTOS ||
+          property._count.photos > MAX_PROPERTY_PHOTOS
+        ) {
+          throw new BadRequestException(
+            'A property requires between 3 and 10 photos before submission',
+          );
+        }
+        const updated = await transaction.property.updateMany({
+          where: { id, landlordId, status: { in: manageableStatuses } },
+          data: {
+            status: PropertyStatus.PENDING_REVIEW,
+            rejectionReason: null,
+          },
+        });
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Property has already been submitted or is not editable',
+          );
+        }
+        return transaction.property.findUniqueOrThrow({
+          where: { id },
+          include: {
+            photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   private async requireManageableProperty(id: string, landlordId: string) {
@@ -79,6 +330,73 @@ export class PropertiesService {
       );
     }
     return property;
+  }
+
+  private async throwPropertyMutationFailure(
+    client: Pick<Prisma.TransactionClient, 'property'>,
+    id: string,
+    landlordId: string,
+  ): Promise<never> {
+    const property = await client.property.findFirst({
+      where: { id, landlordId },
+      select: { status: true },
+    });
+    if (!property) throw new NotFoundException('Property not found');
+    throw new ConflictException(
+      'Only draft or paused properties can be managed in this milestone',
+    );
+  }
+
+  private validatePhoto(file: PropertyPhotoUpload): void {
+    if (!ALLOWED_PROPERTY_PHOTO_MIME_TYPES.includes(file.mimetype as never)) {
+      throw new BadRequestException('Unsupported property photo type');
+    }
+    if (file.size > MAX_PROPERTY_PHOTO_SIZE) {
+      throw new BadRequestException(
+        'Property photos must not exceed 5 MB each',
+      );
+    }
+    if (!this.hasExpectedPhotoSignature(file.buffer, file.mimetype)) {
+      throw new BadRequestException(
+        'Property photo content does not match its file type',
+      );
+    }
+  }
+
+  private hasExpectedPhotoSignature(
+    contents: Buffer,
+    mimeType: string,
+  ): boolean {
+    if (mimeType === 'image/jpeg') {
+      return (
+        contents.length >= 3 &&
+        contents[0] === 0xff &&
+        contents[1] === 0xd8 &&
+        contents[2] === 0xff
+      );
+    }
+    if (mimeType === 'image/png') {
+      return contents
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    }
+    return (
+      mimeType === 'image/webp' &&
+      contents.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      contents.subarray(8, 12).toString('ascii') === 'WEBP'
+    );
+  }
+
+  private async cleanup(objectKeys: string[]): Promise<void> {
+    await Promise.all(
+      objectKeys.map(async (objectKey) => {
+        try {
+          await this.storage.delete(objectKey);
+        } catch {
+          this.logger.error('Property photo cleanup failed');
+        }
+      }),
+    );
   }
 
   private propertyData(input: CreatePropertyDto): CreatePropertyData;

@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PropertyForm } from "./property-form";
 
 describe("PropertyForm", () => {
@@ -12,6 +12,8 @@ describe("PropertyForm", () => {
       configurable: true,
     });
   });
+
+  afterEach(() => jest.restoreAllMocks());
 
   it("creates a draft using calendar-date, decimal, amenities and location fields", async () => {
     fetchMock.mockResolvedValue(response({ ...listing, status: "DRAFT" }));
@@ -45,6 +47,46 @@ describe("PropertyForm", () => {
     expect(JSON.parse(options.body)).not.toHaveProperty("landlordId");
     expect(JSON.parse(options.body)).not.toHaveProperty("status");
   });
+
+  it("submits a property with three photos and locks editing from refreshed state", async () => {
+    const ready = {
+      ...listing,
+      photos: ["front", "room", "kitchen"].map((name, index) => ({
+        id: `photo-${index}`,
+        originalName: `${name}.jpg`,
+        mimeType: "image/jpeg",
+        sizeBytes: 100,
+        sortOrder: index,
+        createdAt: listing.createdAt,
+      })),
+    };
+    fetchMock
+      .mockResolvedValueOnce(response([ready]))
+      .mockResolvedValueOnce(response({ ...ready, status: "PENDING_REVIEW" }))
+      .mockResolvedValueOnce(
+        response([{ ...ready, status: "PENDING_REVIEW" }]),
+      );
+    jest.spyOn(window, "confirm").mockReturnValue(true);
+    render(<PropertyForm propertyId="property-1" />);
+
+    const submit = await screen.findByRole("button", {
+      name: "Submit for review",
+    });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() =>
+      expect(screen.getByText("PENDING REVIEW")).toBeInTheDocument(),
+    );
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "http://localhost:4000/properties/property-1/submit-review",
+      expect.objectContaining({ method: "POST" }),
+    ]);
+    expect(
+      screen.queryByRole("button", { name: "Submit for review" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toBeDisabled();
+  });
 });
 
 function fill(label: string, value: string) {
@@ -71,6 +113,7 @@ const listing = {
   rejectionReason: null,
   createdAt: "2026-08-25T00:00:00.000Z",
   updatedAt: "2026-08-25T00:00:00.000Z",
+  photos: [],
 };
 function response(body: unknown) {
   return Promise.resolve({

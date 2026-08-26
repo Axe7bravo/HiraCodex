@@ -183,12 +183,15 @@ model Property {
 }
 
 model PropertyPhoto {
-  id         String   @id @default(cuid())
-  propertyId String
-  objectKey  String   @unique
-  sortOrder  Int
-  createdAt  DateTime @default(now())
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  propertyId   String
+  objectKey    String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  sortOrder    Int
+  createdAt    DateTime @default(now())
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, sortOrder])
 }

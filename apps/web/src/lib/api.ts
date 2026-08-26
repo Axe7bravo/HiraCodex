@@ -114,6 +114,16 @@ export type LandlordProperty = {
   rejectionReason: string | null;
   createdAt: string;
   updatedAt: string;
+  photos: PropertyPhoto[];
+};
+
+export type PropertyPhoto = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  createdAt: string;
 };
 
 export async function apiRequest<T>(

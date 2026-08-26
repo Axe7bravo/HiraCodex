@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { EmailService } from '../src/auth/email.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { PROPERTY_PHOTO_STORAGE } from '../src/properties/property-photo-storage';
 import { VERIFICATION_DOCUMENT_STORAGE } from '../src/verifications/verification-document-storage';
 
 process.env.JWT_SECRET ??=
@@ -20,6 +21,20 @@ describe('Landlord property management (e2e)', () => {
   const password = 'SecurePass123!';
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  const storedPhotos = new Map<string, Buffer>();
+  const propertyStorage = {
+    put: jest.fn((key: string, contents: Buffer) => {
+      storedPhotos.set(key, contents);
+      return Promise.resolve();
+    }),
+    get: jest.fn((key: string) =>
+      Promise.resolve(storedPhotos.get(key) ?? Buffer.alloc(0)),
+    ),
+    delete: jest.fn((key: string) => {
+      storedPhotos.delete(key);
+      return Promise.resolve();
+    }),
+  };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
@@ -31,6 +46,8 @@ describe('Landlord property management (e2e)', () => {
       })
       .overrideProvider(VERIFICATION_DOCUMENT_STORAGE)
       .useValue({ put: jest.fn(), get: jest.fn(), delete: jest.fn() })
+      .overrideProvider(PROPERTY_PHOTO_STORAGE)
+      .useValue(propertyStorage)
       .compile();
     prisma = module.get(PrismaService);
     app = module.createNestApplication();
@@ -175,6 +192,67 @@ describe('Landlord property management (e2e)', () => {
     ).not.toBeNull();
   });
 
+  it('privately manages photos and locks the listing after review submission', async () => {
+    const owner = await authenticatedAgent('photo-owner', UserRole.LANDLORD);
+    const stranger = await authenticatedAgent(
+      'photo-stranger',
+      UserRole.LANDLORD,
+    );
+    const tenant = await authenticatedAgent('photo-tenant', UserRole.TENANT);
+    const created = await owner
+      .post('/properties')
+      .send(validProperty('Photo property'))
+      .expect(201);
+    const propertyId = getBody<PropertyBody>(created).id;
+
+    await tenant
+      .post(`/properties/${propertyId}/photos`)
+      .attach('photo', Buffer.from('x'), 'room.jpg')
+      .expect(403);
+    await owner
+      .post(`/properties/${propertyId}/photos`)
+      .attach('photo', Buffer.from('x'), 'room.gif')
+      .expect(400);
+
+    const photoIds: string[] = [];
+    for (const { name, contents } of validPhotos()) {
+      const uploaded = await owner
+        .post(`/properties/${propertyId}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+      const body = getBody<{ id: string; mimeType: string }>(uploaded);
+      expect(body).not.toHaveProperty('objectKey');
+      photoIds.push(body.id);
+    }
+
+    await owner
+      .get(`/properties/${propertyId}/photos/${photoIds[0]}`)
+      .expect(200)
+      .expect('Content-Type', /image\/jpeg/);
+    await stranger
+      .get(`/properties/${propertyId}/photos/${photoIds[0]}`)
+      .expect(404);
+    await stranger
+      .delete(`/properties/${propertyId}/photos/${photoIds[0]}`)
+      .expect(404);
+
+    await owner
+      .post(`/properties/${propertyId}/submit-review`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect((body as { status: string }).status).toBe('PENDING_REVIEW');
+      });
+    await owner.post(`/properties/${propertyId}/submit-review`).expect(409);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ title: 'Locked title' })
+      .expect(409);
+    await owner
+      .delete(`/properties/${propertyId}/photos/${photoIds[0]}`)
+      .expect(409);
+    await owner.delete(`/properties/${propertyId}`).expect(409);
+  });
+
   function registration(name: string, role: UserRole) {
     return {
       firstName: 'Hira',
@@ -245,4 +323,15 @@ function validProperty(title = 'Roma garden room') {
     nearestInstitution: 'National University of Lesotho',
     distanceNote: 'Ten minutes on foot',
   };
+}
+
+function validPhotos() {
+  return [
+    { name: 'front.jpg', contents: Buffer.from([0xff, 0xd8, 0xff, 0x00]) },
+    {
+      name: 'room.png',
+      contents: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    },
+    { name: 'kitchen.webp', contents: Buffer.from('RIFF0000WEBP') },
+  ];
 }

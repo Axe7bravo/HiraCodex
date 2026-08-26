@@ -65,6 +65,7 @@ const listing = {
   rejectionReason: null,
   createdAt: "2026-08-25T00:00:00.000Z",
   updatedAt: "2026-08-25T00:00:00.000Z",
+  photos: [],
 } as const;
 
 function response(body: unknown, status = 200) {

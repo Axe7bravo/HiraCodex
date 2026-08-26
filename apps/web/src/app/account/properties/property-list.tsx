@@ -116,15 +116,19 @@ export function PropertyList() {
                 <small>
                   {property.roomType} · Available{" "}
                   {property.availableFrom.slice(0, 10)}
+                  {` · ${property.photos.length} photo${property.photos.length === 1 ? "" : "s"}`}
                 </small>
               </div>
               <div className="property-actions">
-                <Link
-                  className="button button-outline button-small"
-                  href={`/account/properties/${property.id}/edit`}
-                >
-                  Edit
-                </Link>
+                {(property.status === "DRAFT" ||
+                  property.status === "PAUSED") && (
+                  <Link
+                    className="button button-outline button-small"
+                    href={`/account/properties/${property.id}/edit`}
+                  >
+                    Edit
+                  </Link>
+                )}
                 {(property.status === "DRAFT" ||
                   property.status === "PAUSED") && (
                   <button
@@ -135,13 +139,16 @@ export function PropertyList() {
                     {property.status === "PAUSED" ? "Return to draft" : "Pause"}
                   </button>
                 )}
-                <button
-                  className="button button-danger button-small"
-                  disabled={busyId === property.id}
-                  onClick={() => void remove(property)}
-                >
-                  Delete
-                </button>
+                {(property.status === "DRAFT" ||
+                  property.status === "PAUSED") && (
+                  <button
+                    className="button button-danger button-small"
+                    disabled={busyId === property.id}
+                    onClick={() => void remove(property)}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </li>
           ))}
