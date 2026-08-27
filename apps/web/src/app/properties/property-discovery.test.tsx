@@ -15,6 +15,7 @@ describe("PropertyDiscovery", () => {
 
   beforeEach(() => {
     params = new URLSearchParams();
+    window.history.replaceState({}, "", "/properties");
     push.mockReset();
     fetchMock.mockReset();
     Object.defineProperty(global, "fetch", {
@@ -35,28 +36,100 @@ describe("PropertyDiscovery", () => {
       "src",
       "http://localhost:4000/discovery/properties/property-1/photos/photo-1",
     );
-    expect(screen.getByText("Wi-Fi")).toBeInTheDocument();
+    expect(screen.getAllByText("Wi-Fi")).toHaveLength(2);
+    expect(screen.queryByText("Hira approved")).not.toBeInTheDocument();
   });
 
-  it("sends filters through URL state for an authoritative backend request", async () => {
+  it("maps dropdown, calendar, amenity and price controls to existing query state", async () => {
     fetchMock.mockResolvedValue(response(page([])));
     render(<PropertyDiscovery />);
     await screen.findByText("No homes match these filters");
 
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "Roma" },
+    });
+    fireEvent.change(screen.getByLabelText("Room type"), {
+      target: { value: "Private room" },
+    });
+    const calendar = screen.getByTestId("move-in-calendar");
+    const showPicker = jest.fn();
+    Object.defineProperty(calendar, "showPicker", {
+      configurable: true,
+      value: showPicker,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose move-in date" }),
+    );
+    expect(showPicker).toHaveBeenCalledTimes(1);
+    expect(calendar).toHaveAttribute("tabindex", "-1");
+    expect(screen.queryByLabelText("Move-in")).not.toBeInTheDocument();
+    fireEvent.change(calendar, {
+      target: { value: "2026-09-15" },
+    });
+    fireEvent.change(screen.getByLabelText("Institution"), {
+      target: { value: "National University of Lesotho" },
+    });
+    fireEvent.click(screen.getByLabelText("Wi-Fi"));
+    fireEvent.click(screen.getByLabelText("Parking"));
     fireEvent.change(screen.getByLabelText("Minimum price"), {
       target: { value: "800" },
     });
-    fireEvent.change(screen.getByLabelText("Area"), {
-      target: { value: "Roma" },
+    fireEvent.change(screen.getByLabelText("Maximum price"), {
+      target: { value: "2500" },
     });
-    fireEvent.change(screen.getByLabelText(/Amenities/), {
-      target: { value: "Wi-Fi, Parking" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Show listings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search listings" }));
 
     expect(push).toHaveBeenCalledWith(
-      "/properties?minPrice=800&area=Roma&amenities=Wi-Fi%2C+Parking",
+      "/properties?minPrice=800&maxPrice=2500&area=Roma&nearestInstitution=National+University+of+Lesotho&availableBy=2026-09-15&roomType=Private+room&amenities=Wi-Fi%2CParking",
     );
+  });
+
+  it("resets move-in and all discovery controls", async () => {
+    fetchMock.mockResolvedValue(response(page([])));
+    render(<PropertyDiscovery />);
+    await screen.findByText("No homes match these filters");
+
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "Roma" },
+    });
+    fireEvent.change(screen.getByLabelText("Room type"), {
+      target: { value: "Studio" },
+    });
+    fireEvent.change(screen.getByTestId("move-in-calendar"), {
+      target: { value: "2026-09-15" },
+    });
+    fireEvent.click(screen.getByLabelText("Wi-Fi"));
+    fireEvent.change(screen.getByLabelText("Minimum price"), {
+      target: { value: "1000" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear date" }));
+    expect(screen.getByTestId("move-in-calendar")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(screen.getByLabelText("Location")).toHaveValue("");
+    expect(screen.getByLabelText("Room type")).toHaveValue("");
+    expect(screen.getByLabelText("Wi-Fi")).not.toBeChecked();
+    expect(screen.getByText("Min: Any")).toBeInTheDocument();
+    expect(push).toHaveBeenLastCalledWith("/properties");
+  });
+
+  it("restores controlled filters when browser history changes", async () => {
+    fetchMock.mockResolvedValue(response(page([])));
+    render(<PropertyDiscovery />);
+    await screen.findByText("No homes match these filters");
+
+    window.history.pushState(
+      {},
+      "",
+      "/properties?area=Roma&roomType=Studio&amenities=Wi-Fi%2CParking",
+    );
+    fireEvent.popState(window);
+
+    expect(screen.getByLabelText("Location")).toHaveValue("Roma");
+    expect(screen.getByLabelText("Room type")).toHaveValue("Studio");
+    expect(screen.getByLabelText("Wi-Fi")).toBeChecked();
+    expect(screen.getByLabelText("Parking")).toBeChecked();
   });
 
   it("shows invalid-filter, API-error and image-failure states", async () => {
