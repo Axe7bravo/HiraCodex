@@ -1,14 +1,53 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 :root {
-  --blue: #0b55f5;
-  --lime: #e4f900;
-  --ink: #101217;
-  --muted: #667085;
-  --line: #d9dee8;
-  --surface: #f4f6fa;
+  --brand-primary: #1663ff;
+  --brand-primary-hover: #0d50df;
+  --brand-primary-pressed: #0a40bd;
+  --brand-accent: #f0ff4d;
+  --brand-accent-hover: #dce936;
+  --brand-accent-pressed: #c7d126;
+  --background: #ffffff;
+  --foreground: #101217;
+  --muted-background: #f4f6fa;
+  --muted-foreground: #667085;
+  --border: #d9dee8;
+  --input: #c9d0dc;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
   --success: #16794d;
-  --danger: #b42318;
+  --success-foreground: #ffffff;
+  --ring: var(--brand-primary);
+  --radius: 0.75rem;
+  --space-page: clamp(1rem, 4vw, 2rem);
+  --space-section: clamp(3rem, 8vw, 6rem);
+  --space-stack: 1rem;
+  --type-display: clamp(2.8rem, 7vw, 5.5rem);
+  --type-page-heading: clamp(2rem, 5vw, 3.5rem);
+  --type-section-heading: clamp(1.5rem, 3vw, 2.25rem);
+
+  /* Existing Hira aliases remain stable while screens migrate incrementally. */
+  --blue: var(--brand-primary);
+  --lime: var(--brand-accent);
+  --ink: var(--foreground);
+  --muted: var(--muted-foreground);
+  --line: var(--border);
+  --surface: var(--muted-background);
+  --danger: var(--destructive);
+
+  /* shadcn semantic roles mapped onto the Hira palette. */
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--brand-accent);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--brand-accent);
+  --accent-foreground: var(--foreground);
 }
 
 .card-detail-link {
@@ -175,7 +214,6 @@ html {
 body {
   margin: 0;
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
 }
 a {
   color: inherit;
@@ -1028,4 +1066,95 @@ dd {
     display: grid;
     grid-template-columns: 1fr;
   }
+}
+
+@theme inline {
+  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-accent: var(--brand-accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted-background);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+.hira-display,
+.hira-page-heading,
+.hira-section-heading {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+
+.hira-display {
+  font-size: var(--type-display);
+  line-height: 0.95;
+}
+
+.hira-page-heading {
+  font-size: var(--type-page-heading);
+  line-height: 1;
+}
+
+.hira-section-heading {
+  font-size: var(--type-section-heading);
+  line-height: 1.1;
+}
+
+.hira-body {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.hira-supporting {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.hira-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
