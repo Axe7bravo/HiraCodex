@@ -99,6 +99,9 @@ describe('Public property detail and tenant favourites (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.inquiry.deleteMany({
+      where: { tenantId: { in: [tenantAId, tenantBId] } },
+    });
     await prisma.favourite.deleteMany({
       where: { tenantId: { in: [tenantAId, tenantBId] } },
     });
@@ -191,6 +194,176 @@ describe('Public property detail and tenant favourites (e2e)', () => {
         where: { tenantId: tenantAId, propertyId: activeId },
       }),
     ).toBe(0);
+  });
+
+  it('creates and isolates a structured inquiry using session ownership', async () => {
+    const tenantA = await authenticatedAgent('tenant-a');
+    const tenantB = await authenticatedAgent('tenant-b');
+    const landlord = await authenticatedAgent('landlord');
+    await prisma.user.create({
+      data: userData(
+        'landlord-b',
+        UserRole.LANDLORD,
+        await argon2.hash(password),
+      ),
+    });
+    const landlordB = await authenticatedAgent('landlord-b');
+
+    await request(app.getHttpServer())
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: 'Is this room available?' })
+      .expect(401);
+    await landlord
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: 'Not a tenant' })
+      .expect(403);
+    await tenantA
+      .post(`/properties/${inactiveId}/inquiries`)
+      .send({ message: 'Can I see this private listing?' })
+      .expect(404);
+    await tenantA
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: '   ', moveInDate: '2026-09-15T12:30:00.000Z' })
+      .expect(400);
+    await tenantA
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: 'Hello', moveInDate: '2026-09-31' })
+      .expect(400);
+    await tenantA
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: 'Hello', tenantId: tenantBId })
+      .expect(400);
+
+    const created = getBody<{ id: string; moveInDate: string }>(
+      await tenantA
+        .post(`/properties/${activeId}/inquiries`)
+        .send({
+          message: '  Is this room available in September?  ',
+          moveInDate: '2026-09-15',
+        })
+        .expect(201),
+    );
+    expect(created.moveInDate).toBe('2026-09-15T00:00:00.000Z');
+    await expect(
+      prisma.inquiry.findUniqueOrThrow({ where: { id: created.id } }),
+    ).resolves.toMatchObject({
+      tenantId: tenantAId,
+      message: 'Is this room available in September?',
+    });
+
+    const tenantList = getBody<Array<{ id: string }>>(
+      await tenantA.get('/inquiries').expect(200),
+    );
+    expect(tenantList.map(({ id }) => id)).toContain(created.id);
+    expect(
+      getBody<Array<{ id: string }>>(
+        await tenantB.get('/inquiries').expect(200),
+      ).map(({ id }) => id),
+    ).not.toContain(created.id);
+
+    const landlordList = getBody<Array<{ id: string; tenant: unknown }>>(
+      await landlord.get('/inquiries').expect(200),
+    );
+    expect(landlordList.map(({ id }) => id)).toContain(created.id);
+    expect(
+      getBody<Array<{ id: string }>>(
+        await landlordB.get('/inquiries').expect(200),
+      ).map(({ id }) => id),
+    ).not.toContain(created.id);
+    expect(JSON.stringify(landlordList)).not.toMatch(
+      /email|passwordHash|objectKey|fullAddress|latitude|longitude|rejectionReason|documents/,
+    );
+
+    await tenantA
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED' })
+      .expect(403);
+    await (
+      await authenticatedAgent('admin')
+    )
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED' })
+      .expect(403);
+    await landlordB
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED' })
+      .expect(404);
+    await landlord
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'OPEN' })
+      .expect(400);
+    await landlord
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED', landlordId: 'client-controlled' })
+      .expect(400);
+
+    const responded = getBody<{ status: string }>(
+      await landlord
+        .patch(`/inquiries/${created.id}/status`)
+        .send({ status: 'RESPONDED' })
+        .expect(200),
+    );
+    expect(responded.status).toBe('RESPONDED');
+    expect(JSON.stringify(responded)).not.toMatch(
+      /email|passwordHash|objectKey|fullAddress|latitude|longitude|rejectionReason|documents/,
+    );
+    const closed = getBody<{ status: string }>(
+      await landlord
+        .patch(`/inquiries/${created.id}/status`)
+        .send({ status: 'CLOSED' })
+        .expect(200),
+    );
+    expect(closed.status).toBe('CLOSED');
+    await landlord
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED' })
+      .expect(409);
+  });
+
+  it('does not create an inquiry when an in-flight property becomes non-ACTIVE', async () => {
+    const tenant = await authenticatedAgent('tenant-b');
+    const before = await prisma.inquiry.count({
+      where: { tenantId: tenantBId, propertyId: activeId },
+    });
+    let releaseTransition: () => void = () => undefined;
+    const mayTransition = new Promise<void>((resolve) => {
+      releaseTransition = () => resolve();
+    });
+    let reportLockAcquired: () => void = () => undefined;
+    const lockAcquired = new Promise<void>((resolve) => {
+      reportLockAcquired = () => resolve();
+    });
+    const transition = prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id" FROM "Property" WHERE "id" = ${activeId} FOR UPDATE
+      `;
+      reportLockAcquired();
+      await mayTransition;
+      await transaction.property.update({
+        where: { id: activeId },
+        data: { status: PropertyStatus.PAUSED },
+      });
+    });
+    await lockAcquired;
+
+    const creation = tenant
+      .post(`/properties/${activeId}/inquiries`)
+      .send({ message: 'Can I still inquire?' })
+      .then((response) => response);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    releaseTransition();
+    await transition;
+
+    expect((await creation).status).toBe(404);
+    expect(
+      await prisma.inquiry.count({
+        where: { tenantId: tenantBId, propertyId: activeId },
+      }),
+    ).toBe(before);
+    await prisma.property.update({
+      where: { id: activeId },
+      data: { status: PropertyStatus.ACTIVE },
+    });
   });
 
   it('rejects non-ACTIVE saves and omits a saved property after deactivation', async () => {

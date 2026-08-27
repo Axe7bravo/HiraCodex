@@ -14,6 +14,8 @@ import { DiscoveryPropertiesController } from './discovery-properties.controller
 import { DiscoveryPropertiesService } from './discovery-properties.service';
 import { FavouritesController } from './favourites.controller';
 import { FavouritesService } from './favourites.service';
+import { InquiriesController } from './inquiries.controller';
+import { InquiriesService } from './inquiries.service';
 
 @Module({
   imports: [AuthModule],
@@ -22,12 +24,14 @@ import { FavouritesService } from './favourites.service';
     AdminPropertiesController,
     DiscoveryPropertiesController,
     FavouritesController,
+    InquiriesController,
   ],
   providers: [
     PropertiesService,
     AdminPropertiesService,
     DiscoveryPropertiesService,
     FavouritesService,
+    InquiriesService,
     {
       provide: PROPERTY_PHOTO_STORAGE,
       inject: [ConfigService],

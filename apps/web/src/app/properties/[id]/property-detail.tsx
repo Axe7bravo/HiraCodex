@@ -50,6 +50,11 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [moveInDate, setMoveInDate] = useState("");
+  const [sendingInquiry, setSendingInquiry] = useState(false);
+  const [inquiryError, setInquiryError] = useState("");
+  const [inquirySent, setInquirySent] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -87,6 +92,26 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
       setSaveError((reason as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendInquiry(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSendingInquiry(true);
+    setInquiryError("");
+    setInquirySent(false);
+    try {
+      await apiRequest(`/properties/${propertyId}/inquiries`, {
+        method: "POST",
+        body: JSON.stringify({ message, moveInDate: moveInDate || null }),
+      });
+      setMessage("");
+      setMoveInDate("");
+      setInquirySent(true);
+    } catch (reason) {
+      setInquiryError((reason as Error).message);
+    } finally {
+      setSendingInquiry(false);
     }
   }
 
@@ -161,21 +186,58 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
               : "Landlord verification not confirmed"}
           </p>
           {viewer === "tenant" && (
-            <button
-              className="button button-primary"
-              disabled={saving}
-              onClick={toggleFavourite}
-            >
-              {saving
-                ? "Saving…"
-                : saved
-                  ? "Remove from saved"
-                  : "Save property"}
-            </button>
+            <>
+              <button
+                className="button button-outline"
+                disabled={saving}
+                onClick={toggleFavourite}
+              >
+                {saving
+                  ? "Saving…"
+                  : saved
+                    ? "Remove from saved"
+                    : "Save property"}
+              </button>
+              <form className="inquiry-form" onSubmit={sendInquiry}>
+                <label htmlFor="inquiry-message">Message</label>
+                <textarea
+                  id="inquiry-message"
+                  required
+                  maxLength={2000}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                />
+                <label htmlFor="inquiry-move-in">
+                  Preferred move-in date <span>(optional)</span>
+                </label>
+                <input
+                  id="inquiry-move-in"
+                  type="date"
+                  value={moveInDate}
+                  onChange={(event) => setMoveInDate(event.target.value)}
+                />
+                <button
+                  className="button button-primary"
+                  disabled={sendingInquiry}
+                >
+                  {sendingInquiry ? "Sending…" : "Send inquiry"}
+                </button>
+                {inquirySent && (
+                  <p className="state-success" role="status">
+                    Inquiry sent successfully.
+                  </p>
+                )}
+                {inquiryError && (
+                  <p className="state-failure" role="alert">
+                    {inquiryError}
+                  </p>
+                )}
+              </form>
+            </>
           )}
           {viewer === "guest" && (
             <Link className="button button-primary" href="/login">
-              Sign in to save
+              Sign in to save or inquire
             </Link>
           )}
           {saveError && (

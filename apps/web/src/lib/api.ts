@@ -202,6 +202,36 @@ export type FavouriteItem = {
   property: DiscoveryProperty;
 };
 
+export type InquiryPropertySummary = Pick<
+  DiscoveryProperty,
+  | "id"
+  | "title"
+  | "monthlyPrice"
+  | "roomType"
+  | "area"
+  | "city"
+  | "nearestInstitution"
+>;
+
+export type Inquiry = {
+  id: string;
+  propertyId: string;
+  message: string;
+  moveInDate: string | null;
+  status: "OPEN" | "RESPONDED" | "CLOSED";
+  createdAt: string;
+  updatedAt: string;
+  property: InquiryPropertySummary;
+  tenant?: {
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    contactMethod: string | null;
+    institution: string | null;
+    verified: boolean;
+  };
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},

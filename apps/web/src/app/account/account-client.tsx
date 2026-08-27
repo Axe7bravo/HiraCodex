@@ -159,8 +159,19 @@ export function AccountClient() {
       )}
 
       {profile.role === "TENANT" && (
-        <Link className="button button-outline" href="/account/favourites">
-          Saved properties
+        <div className="property-actions">
+          <Link className="button button-outline" href="/account/favourites">
+            Saved properties
+          </Link>
+          <Link className="button button-outline" href="/account/inquiries">
+            Your inquiries
+          </Link>
+        </div>
+      )}
+
+      {profile.role === "LANDLORD" && (
+        <Link className="button button-outline" href="/account/inquiries">
+          Property inquiries
         </Link>
       )}
 

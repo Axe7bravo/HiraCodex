@@ -56,31 +56,23 @@ describe("PropertyDetail", () => {
 
   it("renders safe public detail and prompts a guest to sign in", async () => {
     fetchMock
-      .mockResolvedValueOnce(
-        response(detail),
-      )
-      .mockResolvedValueOnce(
-        response({ message: "Unauthorized" }, 401),
-      );
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response({ message: "Unauthorized" }, 401));
     render(<PropertyDetail propertyId="property-1" />);
     expect(
       await screen.findByRole("heading", { name: detail.title }),
     ).toBeInTheDocument();
     expect(screen.getByText("Verified landlord")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Sign in to save" }),
+      screen.getByRole("link", { name: "Sign in to save or inquire" }),
     ).toHaveAttribute("href", "/login");
   });
 
   it("lets a tenant save and reconciles from the authoritative list", async () => {
     const tenant = { id: "tenant", role: "TENANT" };
     fetchMock
-      .mockResolvedValueOnce(
-        response(detail),
-      )
-      .mockResolvedValueOnce(
-        response(tenant),
-      )
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response(tenant))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({}, 201))
       .mockResolvedValueOnce(
@@ -98,6 +90,48 @@ describe("PropertyDetail", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/favourites/property-1"),
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("submits a structured tenant inquiry and prevents duplicate in-flight submission", async () => {
+    const tenant = { id: "tenant", role: "TENANT" };
+    let resolveInquiry:
+      ((value: ReturnType<typeof response>) => void) | undefined;
+    fetchMock
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response(tenant))
+      .mockResolvedValueOnce(response([]))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveInquiry = resolve;
+          }),
+      );
+    render(<PropertyDetail propertyId="property-1" />);
+    fireEvent.change(await screen.findByLabelText("Message"), {
+      target: { value: "Is the room still available?" },
+    });
+    fireEvent.change(screen.getByLabelText(/Preferred move-in date/), {
+      target: { value: "2026-09-15" },
+    });
+    const button = screen.getByRole("button", { name: "Send inquiry" });
+    fireEvent.click(button);
+    expect(
+      await screen.findByRole("button", { name: "Sending…" }),
+    ).toBeDisabled();
+    resolveInquiry?.(response({ id: "inquiry-1" }, 201));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Inquiry sent successfully",
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/properties/property-1/inquiries"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          message: "Is the room still available?",
+          moveInDate: "2026-09-15",
+        }),
+      }),
     );
   });
 });

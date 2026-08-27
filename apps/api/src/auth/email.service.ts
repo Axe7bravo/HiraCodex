@@ -55,6 +55,14 @@ export class EmailService {
     );
   }
 
+  sendNewInquiry(to: string): Promise<void> {
+    return this.send(
+      to,
+      'New inquiry on your Hira property',
+      'A tenant sent an inquiry about one of your properties. Sign in to Hira to review it.',
+    );
+  }
+
   private async send(to: string, subject: string, text: string): Promise<void> {
     const apiKey = this.config.getOrThrow<string>('RESEND_API_KEY');
     const from = this.config.getOrThrow<string>('EMAIL_FROM');
