@@ -166,13 +166,21 @@ export function AccountClient() {
           <Link className="button button-outline" href="/account/inquiries">
             Your inquiries
           </Link>
+          <Link className="button button-outline" href="/account/requests">
+            Your requests
+          </Link>
         </div>
       )}
 
       {profile.role === "LANDLORD" && (
-        <Link className="button button-outline" href="/account/inquiries">
-          Property inquiries
-        </Link>
+        <div className="property-actions">
+          <Link className="button button-outline" href="/account/inquiries">
+            Property inquiries
+          </Link>
+          <Link className="button button-outline" href="/account/requests">
+            Accommodation requests
+          </Link>
+        </div>
       )}
 
       {profile.role === "ADMIN" && (

@@ -55,6 +55,11 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
   const [sendingInquiry, setSendingInquiry] = useState(false);
   const [inquiryError, setInquiryError] = useState("");
   const [inquirySent, setInquirySent] = useState(false);
+  const [requestDate, setRequestDate] = useState("");
+  const [requestNote, setRequestNote] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState("");
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -112,6 +117,29 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
       setInquiryError((reason as Error).message);
     } finally {
       setSendingInquiry(false);
+    }
+  }
+
+  async function requestAccommodation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRequesting(true);
+    setRequestError("");
+    setRequestSent(false);
+    try {
+      await apiRequest(`/properties/${propertyId}/requests`, {
+        method: "POST",
+        body: JSON.stringify({
+          preferredMoveInDate: requestDate,
+          note: requestNote || null,
+        }),
+      });
+      setRequestDate("");
+      setRequestNote("");
+      setRequestSent(true);
+    } catch (reason) {
+      setRequestError((reason as Error).message);
+    } finally {
+      setRequesting(false);
     }
   }
 
@@ -230,6 +258,42 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
                 {inquiryError && (
                   <p className="state-failure" role="alert">
                     {inquiryError}
+                  </p>
+                )}
+              </form>
+              <form
+                className="inquiry-form request-form"
+                onSubmit={requestAccommodation}
+              >
+                <h3>Request accommodation</h3>
+                <label htmlFor="request-move-in">Preferred move-in date</label>
+                <input
+                  id="request-move-in"
+                  type="date"
+                  required
+                  value={requestDate}
+                  onChange={(event) => setRequestDate(event.target.value)}
+                />
+                <label htmlFor="request-note">
+                  Note <span>(optional)</span>
+                </label>
+                <textarea
+                  id="request-note"
+                  maxLength={2000}
+                  value={requestNote}
+                  onChange={(event) => setRequestNote(event.target.value)}
+                />
+                <button className="button button-primary" disabled={requesting}>
+                  {requesting ? "Submitting…" : "Request accommodation"}
+                </button>
+                {requestSent && (
+                  <p className="state-success" role="status">
+                    Accommodation request submitted.
+                  </p>
+                )}
+                {requestError && (
+                  <p className="state-failure" role="alert">
+                    {requestError}
                   </p>
                 )}
               </form>

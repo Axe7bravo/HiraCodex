@@ -63,6 +63,30 @@ export class EmailService {
     );
   }
 
+  sendNewAccommodationRequest(to: string): Promise<void> {
+    return this.send(
+      to,
+      'New accommodation request on Hira',
+      'A tenant submitted an accommodation request for one of your properties. Sign in to Hira to review it.',
+    );
+  }
+
+  sendAccommodationRequestAccepted(to: string): Promise<void> {
+    return this.send(
+      to,
+      'Your Hira accommodation request was accepted',
+      'A landlord accepted your accommodation request. Sign in to Hira to review its status and continue through the agreed contact channel.',
+    );
+  }
+
+  sendAccommodationRequestDeclined(to: string): Promise<void> {
+    return this.send(
+      to,
+      'Update on your Hira accommodation request',
+      'A landlord declined your accommodation request. Sign in to Hira to review its status.',
+    );
+  }
+
   private async send(to: string, subject: string, text: string): Promise<void> {
     const apiKey = this.config.getOrThrow<string>('RESEND_API_KEY');
     const from = this.config.getOrThrow<string>('EMAIL_FROM');

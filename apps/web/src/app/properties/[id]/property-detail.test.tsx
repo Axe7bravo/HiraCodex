@@ -111,9 +111,14 @@ describe("PropertyDetail", () => {
     fireEvent.change(await screen.findByLabelText("Message"), {
       target: { value: "Is the room still available?" },
     });
-    fireEvent.change(screen.getByLabelText(/Preferred move-in date/), {
-      target: { value: "2026-09-15" },
-    });
+    fireEvent.change(
+      screen.getByLabelText(/Preferred move-in date/, {
+        selector: "#inquiry-move-in",
+      }),
+      {
+        target: { value: "2026-09-15" },
+      },
+    );
     const button = screen.getByRole("button", { name: "Send inquiry" });
     fireEvent.click(button);
     expect(
@@ -130,6 +135,42 @@ describe("PropertyDetail", () => {
         body: JSON.stringify({
           message: "Is the room still available?",
           moveInDate: "2026-09-15",
+        }),
+      }),
+    );
+  });
+
+  it("submits a tenant accommodation request from authoritative form data", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response({ id: "tenant", role: "TENANT" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(
+        response({ id: "request-1", status: "PENDING" }, 201),
+      );
+    render(<PropertyDetail propertyId="property-1" />);
+    fireEvent.change(
+      await screen.findByLabelText("Preferred move-in date", {
+        selector: "#request-move-in",
+      }),
+      { target: { value: "2026-10-01" } },
+    );
+    fireEvent.change(screen.getByLabelText(/^Note/), {
+      target: { value: "I can move promptly." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Request accommodation" }),
+    );
+    expect(
+      await screen.findByText("Accommodation request submitted."),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/properties/property-1/requests"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          preferredMoveInDate: "2026-10-01",
+          note: "I can move promptly.",
         }),
       }),
     );

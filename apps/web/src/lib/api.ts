@@ -232,6 +232,18 @@ export type Inquiry = {
   };
 };
 
+export type AccommodationRequest = {
+  id: string;
+  propertyId: string;
+  preferredMoveInDate: string;
+  note: string | null;
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+  createdAt: string;
+  updatedAt: string;
+  property: InquiryPropertySummary;
+  tenant?: Inquiry["tenant"];
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
