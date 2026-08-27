@@ -8,6 +8,7 @@ node_modules/
 apps/api/.env
 apps/web/.env.local
 
+
 # Build output
 .next/
 dist/
