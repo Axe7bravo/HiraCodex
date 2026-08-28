@@ -4,9 +4,21 @@ import { PropertyDetail } from "./property-detail";
 
 jest.mock("next/image", () => ({
   __esModule: true,
-  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
-    <img {...props} />
-  ),
+  default: ({
+    fill,
+    unoptimized,
+    priority,
+    ...props
+  }: React.ImgHTMLAttributes<HTMLImageElement> & {
+    fill?: boolean;
+    unoptimized?: boolean;
+    priority?: boolean;
+  }) => {
+    void fill;
+    void unoptimized;
+    void priority;
+    return <img {...props} />;
+  },
 }));
 
 const detail = {
@@ -62,7 +74,7 @@ describe("PropertyDetail", () => {
     expect(
       await screen.findByRole("heading", { name: detail.title }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Verified landlord")).toBeInTheDocument();
+    expect(screen.getAllByText("Verified landlord")).toHaveLength(2);
     expect(
       screen.getByRole("link", { name: "Sign in to save or inquire" }),
     ).toHaveAttribute("href", "/login");
@@ -174,6 +186,48 @@ describe("PropertyDetail", () => {
         }),
       }),
     );
+  });
+
+  it("switches the dominant gallery image from an accessible thumbnail", async () => {
+    const withPhotos = {
+      ...detail,
+      photos: [
+        { id: "photo-1", mimeType: "image/jpeg", sortOrder: 0 },
+        { id: "photo-2", mimeType: "image/jpeg", sortOrder: 1 },
+      ],
+    };
+    fetchMock
+      .mockResolvedValueOnce(response(withPhotos))
+      .mockResolvedValueOnce(response({ message: "Unauthorized" }, 401));
+    render(<PropertyDetail propertyId="property-1" />);
+
+    expect(
+      await screen.findByRole("img", { name: `${detail.title} main photo` }),
+    ).toHaveAttribute("src", expect.stringContaining("/photos/photo-1"));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `Show ${detail.title} photo 2`,
+      }),
+    );
+    expect(
+      screen.getByRole("img", { name: `${detail.title} main photo` }),
+    ).toHaveAttribute("src", expect.stringContaining("/photos/photo-2"));
+  });
+
+  it("does not expose tenant actions to a landlord or admin viewer", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response({ id: "landlord", role: "LANDLORD" }));
+    render(<PropertyDetail propertyId="property-1" />);
+    await screen.findByRole("heading", { name: detail.title });
+
+    expect(
+      screen.queryByRole("button", { name: "Save property" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Request accommodation" }),
+    ).not.toBeInTheDocument();
   });
 });
 
