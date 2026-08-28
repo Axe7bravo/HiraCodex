@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, UserProfile } from "@/lib/api";
 import { TenantDashboard } from "./tenant-dashboard";
+import { AdminDashboard } from "./admin-dashboard";
 
 type ProfileForm = {
   firstName: string;
@@ -122,6 +123,25 @@ export function AccountClient() {
         signingOut={signingOut}
         profileEditor={
           <TenantProfileEditor
+            profile={profile}
+            form={form}
+            setField={setField}
+            save={save}
+            saving={saving}
+            saveError={saveError}
+            saved={saved}
+          />
+        }
+      />
+    );
+  }
+
+  if (profile.role === "ADMIN") {
+    return (
+      <AdminDashboard
+        profile={profile}
+        profileEditor={
+          <AdminProfileEditor
             profile={profile}
             form={form}
             setField={setField}
@@ -350,6 +370,33 @@ function TenantProfileEditor({
       <div className="field-row">
         <ProfileInput label="Institution" value={form.institution} onChange={(value) => setField("institution", value)} maxLength={160} />
         <label>Expected move-in date<input type="date" value={form.expectedMoveIn} onChange={(event) => setField("expectedMoveIn", event.target.value)} /></label>
+      </div>
+      {saveError && <p className="form-error" role="alert">{saveError}</p>}
+      {saved && <p className="form-success" role="status">Profile saved successfully.</p>}
+      <button className="button" type="submit" disabled={saving}>{saving ? "Saving profile…" : "Save profile"}</button>
+    </form>
+  );
+}
+
+function AdminProfileEditor({ profile, form, setField, save, saving, saveError, saved }: {
+  profile: Extract<UserProfile, { role: "ADMIN" }>;
+  form: ProfileForm;
+  setField: (field: keyof ProfileForm, value: string) => void;
+  save: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  saving: boolean;
+  saveError: string;
+  saved: boolean;
+}) {
+  return (
+    <form className="auth-form profile-form" onSubmit={save}>
+      <div className="field-row">
+        <ProfileInput label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required maxLength={80} autoComplete="given-name" />
+        <ProfileInput label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required maxLength={80} autoComplete="family-name" />
+      </div>
+      <label>Email address<input value={profile.email} type="email" readOnly /><small>Email changes are not available in this version.</small></label>
+      <div className="field-row">
+        <ProfileInput label="Phone" value={form.phone} onChange={(value) => setField("phone", value)} maxLength={40} autoComplete="tel" />
+        <ProfileInput label="Contact preference / method" value={form.contactMethod} onChange={(value) => setField("contactMethod", value)} maxLength={80} />
       </div>
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
       {saved && <p className="form-success" role="status">Profile saved successfully.</p>}

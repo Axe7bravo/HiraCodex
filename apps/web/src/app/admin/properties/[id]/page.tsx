@@ -1,4 +1,4 @@
-import { SiteHeader } from "@/components/site-header";
+import { AdminShell } from "@/components/admin-shell";
 import { AdminPropertyReview } from "./property-review";
 
 export default async function AdminPropertyPage({
@@ -8,11 +8,6 @@ export default async function AdminPropertyPage({
 }) {
   const { id } = await params;
   return (
-    <main className="auth-page">
-      <SiteHeader />
-      <div className="account-shell property-shell">
-        <AdminPropertyReview id={id} />
-      </div>
-    </main>
+    <AdminShell><AdminPropertyReview id={id} /></AdminShell>
   );
 }

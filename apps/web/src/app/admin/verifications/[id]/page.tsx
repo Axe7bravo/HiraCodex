@@ -1,4 +1,4 @@
-import { SiteHeader } from "@/components/site-header";
+import { AdminShell } from "@/components/admin-shell";
 import { AdminVerificationReview } from "./verification-review";
 
 export default async function AdminVerificationDetailPage({
@@ -8,11 +8,6 @@ export default async function AdminVerificationDetailPage({
 }) {
   const { id } = await params;
   return (
-    <main className="auth-page">
-      <SiteHeader />
-      <div className="account-shell admin-shell">
-        <AdminVerificationReview id={id} />
-      </div>
-    </main>
+    <AdminShell><AdminVerificationReview id={id} /></AdminShell>
   );
 }

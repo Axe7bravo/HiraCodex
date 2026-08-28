@@ -1,13 +1,8 @@
-import { SiteHeader } from "@/components/site-header";
+import { AdminShell } from "@/components/admin-shell";
 import { AdminVerificationQueue } from "./verification-queue";
 
 export default function AdminVerificationsPage() {
   return (
-    <main className="auth-page">
-      <SiteHeader />
-      <div className="account-shell admin-shell">
-        <AdminVerificationQueue />
-      </div>
-    </main>
+    <AdminShell><AdminVerificationQueue /></AdminShell>
   );
 }

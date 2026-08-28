@@ -39,9 +39,19 @@ export function SiteHeader() {
     }
   }
 
-  const authenticatedTenant =
-    session !== "loading" && session !== "guest" && session.role === "TENANT";
+  const authenticatedProfile =
+    session !== "loading" && session !== "guest" ? session : null;
   const inAccount = pathname.startsWith("/account");
+  const inAdmin = pathname.startsWith("/admin");
+  const inPropertyDiscovery = pathname.startsWith("/properties");
+  const accountLabel =
+    authenticatedProfile?.role === "ADMIN"
+      ? "Admin dashboard"
+      : authenticatedProfile?.role === "LANDLORD"
+        ? "Landlord account"
+        : "My account";
+  const inRoleArea =
+    inAccount || (authenticatedProfile?.role === "ADMIN" && inAdmin);
 
   return (
     <header className="site-header">
@@ -49,15 +59,21 @@ export function SiteHeader() {
         Hira<span>.</span>
       </Link>
       <nav aria-label="Account navigation">
-        <Link href="/properties">Find housing</Link>
-        {authenticatedTenant ? (
+        <Link
+          className={inPropertyDiscovery ? "site-header-current" : undefined}
+          href="/properties"
+          aria-current={inPropertyDiscovery ? "page" : undefined}
+        >
+          Find housing
+        </Link>
+        {authenticatedProfile ? (
           <>
             <Link
-              className={inAccount ? "site-header-current" : undefined}
+              className={inRoleArea ? "site-header-current" : undefined}
               href="/account"
-              aria-current={inAccount ? "page" : undefined}
+              aria-current={inRoleArea ? "page" : undefined}
             >
-              My account
+              {accountLabel}
             </Link>
             <button
               className="site-header-signout"

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AdminVerificationQueueItem, apiRequest } from "@/lib/api";
+import { AdminStatus } from "@/components/admin-shell";
 
 type Filter = "" | "STUDENT" | "LANDLORD";
 
@@ -28,12 +30,14 @@ export function AdminVerificationQueue() {
   }
 
   return (
-    <section className="account-card profile-card admin-review-card">
-      <div>
+    <section className="admin-work-card admin-review-card">
+      <header className="admin-page-heading">
+        <div>
         <p className="eyebrow">Admin review</p>
         <h1>Pending verifications</h1>
         <p>Oldest submissions appear first.</p>
-      </div>
+        </div>
+      </header>
       <label className="admin-filter">
         Verification type
         <select
@@ -45,14 +49,14 @@ export function AdminVerificationQueue() {
           <option value="LANDLORD">Landlords</option>
         </select>
       </label>
-      {loading && <p role="status">Loading verification queue…</p>}
+      {loading && <p className="admin-screen-state admin-loading-state" role="status">Loading verification queue…</p>}
       {error && (
         <p className="form-error" role="alert">
           {error}
         </p>
       )}
       {!loading && !error && items.length === 0 && (
-        <p>No pending verifications.</p>
+        <div className="admin-screen-state admin-empty-state"><ShieldCheck aria-hidden="true" /><strong>Verification queues are clear.</strong><span>No student or landlord submissions are awaiting review.</span></div>
       )}
       {!loading && !error && items.length > 0 && (
         <ul className="admin-verification-list">
@@ -63,6 +67,7 @@ export function AdminVerificationQueue() {
                   {item.user.firstName} {item.user.lastName}
                 </strong>
                 <span>{item.type === "STUDENT" ? "Student" : "Landlord"}</span>
+                <AdminStatus status="PENDING" />
                 <small>
                   {context(item)} ·{" "}
                   {new Date(item.createdAt).toLocaleDateString()} ·{" "}

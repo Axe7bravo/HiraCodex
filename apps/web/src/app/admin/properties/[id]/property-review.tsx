@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AdminPropertyDetail, ApiError, apiRequest, apiUrl } from "@/lib/api";
+import { AdminStatus } from "@/components/admin-shell";
 
 export function AdminPropertyReview({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminPropertyDetail | null>(null);
@@ -57,7 +58,7 @@ export function AdminPropertyReview({ id }: { id: string }) {
     }
   }
 
-  if (loading) return <p className="account-state">Loading property review…</p>;
+  if (loading) return <p className="admin-screen-state admin-loading-state" role="status">Loading property review…</p>;
   if (!detail)
     return (
       <p className="account-state form-error" role="alert">
@@ -66,19 +67,19 @@ export function AdminPropertyReview({ id }: { id: string }) {
     );
   const pending = detail.status === "PENDING_REVIEW";
   return (
-    <section className="account-card profile-card admin-review-card">
-      <div>
+    <section className="admin-work-card admin-review-card admin-detail-card">
+      <header className="admin-page-heading">
+        <div>
         <p className="eyebrow">Property review</p>
         <h1>{detail.title}</h1>
         <p>
           {detail.area}, {detail.city} · M{detail.monthlyPrice}/month ·{" "}
           {detail.roomType}
         </p>
-      </div>
-      <div
-        className={`verification-status status-${detail.status.toLowerCase()}`}
-      >
-        <strong>{detail.status.replaceAll("_", " ")}</strong>
+        </div>
+      </header>
+      <div className="admin-detail-status">
+        <AdminStatus status={detail.status} />
         <span>
           Landlord: {detail.landlord.firstName} {detail.landlord.lastName}
         </span>
