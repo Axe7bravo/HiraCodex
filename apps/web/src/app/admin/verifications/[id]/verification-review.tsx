@@ -6,9 +6,9 @@ import {
   AdminVerificationDetail,
   ApiError,
   apiRequest,
-  apiUrl,
 } from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
+import { VerificationDocumentPreview } from "@/components/verification-document-preview";
 
 export function AdminVerificationReview({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminVerificationDetail | null>(null);
@@ -104,7 +104,7 @@ export function AdminVerificationReview({ id }: { id: string }) {
       <ul className="document-list">
         {detail.documents.map((document) => (
           <li key={document.id}>
-            <DocumentPreview verificationId={detail.id} document={document} />
+            <VerificationDocumentPreview endpoint={`/admin/verifications/${detail.id}/documents/${document.id}`} document={document} />
           </li>
         ))}
       </ul>
@@ -151,67 +151,4 @@ export function AdminVerificationReview({ id }: { id: string }) {
       <Link href="/admin/verifications">Back to queue</Link>
     </section>
   );
-}
-
-function DocumentPreview({
-  verificationId,
-  document,
-}: {
-  verificationId: string;
-  document: AdminVerificationDetail["documents"][number];
-}) {
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const endpoint = `${apiUrl}/admin/verifications/${verificationId}/documents/${document.id}`;
-  const filename = document.originalName || "Legacy verification document";
-  const mimeType = document.mimeType || "application/octet-stream";
-  const image = mimeType.startsWith("image/");
-  const pdf = mimeType === "application/pdf";
-
-  useEffect(() => {
-    let active = true;
-    let objectUrl = "";
-
-    fetch(endpoint, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Document preview could not be loaded.");
-        return response.blob();
-      })
-      .then((blob) => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
-      })
-      .catch(() => {
-        if (active) setError("Document preview could not be loaded.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [endpoint]);
-
-  return (
-    <article className="admin-document-preview">
-      <header>
-        <div><strong>{filename}</strong><span>{mimeType} · {formatBytes(document.sizeBytes)}</span></div>
-        {previewUrl && <a className="button button-outline button-small" href={previewUrl} target="_blank" rel="noopener noreferrer">Open document</a>}
-      </header>
-      {loading && <p className="admin-document-state" role="status">Loading secure preview…</p>}
-      {error && <div className="admin-document-state form-error" role="alert"><span>{error}</span><a href={endpoint} target="_blank" rel="noopener noreferrer">Open securely instead</a></div>}
-      {previewUrl && image && <a className="admin-document-image" href={previewUrl} target="_blank" rel="noopener noreferrer">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={previewUrl} alt={`Verification evidence: ${filename}`} /></a>}
-      {previewUrl && pdf && <div className="admin-document-pdf"><object data={previewUrl} type="application/pdf" aria-label={`Preview of ${filename}`}><p>PDF preview is unavailable. <a href={previewUrl} target="_blank" rel="noopener noreferrer">Open the document</a>.</p></object><p>On a small screen, open the document for a more useful view.</p></div>}
-      {previewUrl && !image && !pdf && <p className="admin-document-state">Inline preview is unavailable for this file type. Use “Open document” to inspect it.</p>}
-    </article>
-  );
-}
-
-function formatBytes(size: number): string {
-  if (size < 1024) return `${size} B`;
-  return `${(size / 1024).toFixed(1)} KB`;
 }

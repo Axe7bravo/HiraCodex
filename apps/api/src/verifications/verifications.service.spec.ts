@@ -1,5 +1,5 @@
-import { ConflictException } from '@nestjs/common';
-import { UserRole, VerificationStatus } from '@prisma/client';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { UserRole, VerificationStatus, VerificationType } from '@prisma/client';
 import {
   VerificationsService,
   VerificationUpload,
@@ -19,6 +19,7 @@ describe('VerificationsService', () => {
   };
   const prisma = {
     verification,
+    verificationDocument: { findFirst: jest.fn() },
     $transaction: jest.fn(),
   };
   const storage = {
@@ -97,5 +98,37 @@ describe('VerificationsService', () => {
       service.submit('user-1', UserRole.TENANT, [file('student.pdf')]),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  it('retrieves only a document owned by the authenticated tenant verification', async () => {
+    prisma.verificationDocument.findFirst.mockResolvedValueOnce({
+      objectKey: 'private-key',
+      originalName: 'student.pdf',
+      mimeType: 'application/pdf',
+    });
+    storage.get.mockResolvedValueOnce(Buffer.from('document'));
+
+    await expect(
+      service.getMineDocument('tenant-1', UserRole.TENANT, 'document-1'),
+    ).resolves.toMatchObject({ originalName: 'student.pdf' });
+    expect(prisma.verificationDocument.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'document-1',
+        verification: {
+          userId: 'tenant-1',
+          type: VerificationType.STUDENT,
+        },
+      },
+      select: { objectKey: true, originalName: true, mimeType: true },
+    });
+  });
+
+  it('does not retrieve a document outside the authenticated owner scope', async () => {
+    prisma.verificationDocument.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.getMineDocument('landlord-1', UserRole.LANDLORD, 'other-document'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(storage.get).not.toHaveBeenCalled();
   });
 });

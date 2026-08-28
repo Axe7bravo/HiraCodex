@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest, type Inquiry, type UserProfile } from "@/lib/api";
+import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
 
 export function InquiryList() {
   const [role, setRole] = useState<"TENANT" | "LANDLORD" | null>(null);
@@ -54,9 +55,9 @@ export function InquiryList() {
     }
   }
 
-  return (
-    <div className="discovery-shell inquiry-list">
-      <header className="discovery-heading">
+  const content = (
+    <section className={role === "TENANT" ? "tenant-account-page" : "discovery-shell inquiry-list"}>
+      <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
         <h1>{role === "LANDLORD" ? "Property inquiries" : "Your inquiries"}</h1>
         <p>
@@ -65,26 +66,21 @@ export function InquiryList() {
             : "Questions you have sent to landlords."}
         </p>
       </header>
-      {loading && <p className="discovery-state">Loading inquiries…</p>}
+      {loading && <p className={role === "TENANT" ? "tenant-page-state tenant-loading-state" : "discovery-state"}>Loading inquiries…</p>}
       {error && (
         <p className="discovery-state state-failure" role="alert">
           {error}
         </p>
       )}
       {!loading && !error && items.length === 0 && (
-        <div className="discovery-state discovery-empty">
-          <h2>No inquiries yet</h2>
-          {role === "TENANT" && (
-            <Link href="/properties">Browse properties</Link>
-          )}
-        </div>
+        role === "TENANT" ? <TenantEmpty title="No inquiries yet" copy="You haven't contacted a landlord yet." action="Find housing" /> : <div className="discovery-state discovery-empty"><h2>No inquiries yet</h2></div>
       )}
       {items.length > 0 && (
         <div className="inquiry-cards">
           {items.map((inquiry) => (
-            <article key={inquiry.id} className="inquiry-card">
+            <article key={inquiry.id} className={role === "TENANT" ? "inquiry-card tenant-record-card" : "inquiry-card"}>
               <div>
-                <span className="status-badge">{inquiry.status}</span>
+                {role === "TENANT" ? <TenantStatus status={inquiry.status} /> : <span className="status-badge">{inquiry.status}</span>}
                 <h2>
                   <Link href={`/properties/${inquiry.property.id}`}>
                     {inquiry.property.title}
@@ -92,7 +88,7 @@ export function InquiryList() {
                 </h2>
                 <p>
                   {inquiry.property.area}, {inquiry.property.city} ·{" "}
-                  {inquiry.property.roomType}
+                  {inquiry.property.roomType} · M {Number(inquiry.property.monthlyPrice).toLocaleString()} / month
                 </p>
               </div>
               <p>{inquiry.message}</p>
@@ -162,6 +158,7 @@ export function InquiryList() {
           {updateError}
         </p>
       )}
-    </div>
+    </section>
   );
+  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : <main className="discovery-page">{content}</main>;
 }

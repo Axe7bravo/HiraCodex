@@ -7,6 +7,7 @@ import {
   type AccommodationRequest,
   type UserProfile,
 } from "@/lib/api";
+import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
 
 export function RequestList() {
   const [role, setRole] = useState<"TENANT" | "LANDLORD" | null>(null);
@@ -54,9 +55,9 @@ export function RequestList() {
     }
   }
 
-  return (
-    <div className="discovery-shell inquiry-list">
-      <header className="discovery-heading">
+  const content = (
+    <section className={role === "TENANT" ? "tenant-account-page" : "discovery-shell inquiry-list"}>
+      <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
         <h1>
           {role === "LANDLORD" ? "Accommodation requests" : "Your requests"}
@@ -67,19 +68,14 @@ export function RequestList() {
             : "Track your accommodation requests."}
         </p>
       </header>
-      {loading && <p className="discovery-state">Loading requests…</p>}
+      {loading && <p className={role === "TENANT" ? "tenant-page-state tenant-loading-state" : "discovery-state"}>Loading requests…</p>}
       {error && (
         <p className="discovery-state state-failure" role="alert">
           {error}
         </p>
       )}
       {!loading && !error && items.length === 0 && (
-        <div className="discovery-state discovery-empty">
-          <h2>No requests yet</h2>
-          {role === "TENANT" && (
-            <Link href="/properties">Browse properties</Link>
-          )}
-        </div>
+        role === "TENANT" ? <TenantEmpty title="No accommodation requests yet" copy="You haven't requested accommodation yet." /> : <div className="discovery-state discovery-empty"><h2>No requests yet</h2></div>
       )}
       {items.length > 0 && (
         <div className="inquiry-cards">
@@ -104,8 +100,9 @@ export function RequestList() {
           {mutationError}
         </p>
       )}
-    </div>
+    </section>
   );
+  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : <main className="discovery-page">{content}</main>;
 }
 
 function RequestCard({
@@ -123,9 +120,9 @@ function RequestCard({
   ) => Promise<void>;
 }) {
   return (
-    <article className="inquiry-card">
+    <article className={role === "TENANT" ? "inquiry-card tenant-record-card" : "inquiry-card"}>
       <div>
-        <span className="status-badge">{request.status}</span>
+        {role === "TENANT" ? <TenantStatus status={request.status} /> : <span className="status-badge">{request.status}</span>}
         <h2>
           <Link href={`/properties/${request.property.id}`}>
             {request.property.title}
@@ -133,7 +130,7 @@ function RequestCard({
         </h2>
         <p>
           {request.property.area}, {request.property.city} ·{" "}
-          {request.property.roomType}
+          {request.property.roomType} · M {Number(request.property.monthlyPrice).toLocaleString()} / month
         </p>
       </div>
       <p>

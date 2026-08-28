@@ -3,11 +3,9 @@ import { VerificationClient } from "./verification-client";
 
 export default function VerificationPage() {
   return (
-    <main className="auth-page">
+    <main className="account-overview-page">
       <SiteHeader />
-      <div className="account-shell profile-shell">
-        <VerificationClient />
-      </div>
+      <VerificationClient />
     </main>
   );
 }

@@ -5,6 +5,8 @@ import {
   Inject,
   Injectable,
   Logger,
+  InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -77,6 +79,31 @@ export class VerificationsService {
         documents: [],
       }
     );
+  }
+
+  async getMineDocument(userId: string, role: UserRole, documentId: string) {
+    const type = this.typeForRole(role);
+    const document = await this.prisma.verificationDocument.findFirst({
+      where: {
+        id: documentId,
+        verification: { userId, type },
+      },
+      select: { objectKey: true, originalName: true, mimeType: true },
+    });
+    if (!document) {
+      throw new NotFoundException('Verification document not found');
+    }
+    try {
+      return {
+        contents: await this.storage.get(document.objectKey),
+        originalName: document.originalName,
+        mimeType: document.mimeType,
+      };
+    } catch {
+      throw new InternalServerErrorException(
+        'Verification document could not be retrieved',
+      );
+    }
   }
 
   async submit(userId: string, role: UserRole, files: VerificationUpload[]) {

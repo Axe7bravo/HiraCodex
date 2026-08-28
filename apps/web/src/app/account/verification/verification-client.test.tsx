@@ -4,6 +4,8 @@ import { VerificationClient } from "./verification-client";
 
 describe("VerificationClient", () => {
   const fetchMock = jest.fn();
+  const createObjectURLMock = jest.fn(() => "blob:own-verification");
+  const revokeObjectURLMock = jest.fn();
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -11,6 +13,10 @@ describe("VerificationClient", () => {
       value: fetchMock,
       configurable: true,
     });
+    Object.defineProperty(URL, "createObjectURL", { value: createObjectURLMock, configurable: true });
+    Object.defineProperty(URL, "revokeObjectURL", { value: revokeObjectURLMock, configurable: true });
+    createObjectURLMock.mockClear();
+    revokeObjectURLMock.mockClear();
   });
 
   it("submits tenant files as multipart form data", async () => {
@@ -89,6 +95,22 @@ describe("VerificationClient", () => {
       ).not.toBeInTheDocument(),
     );
   });
+
+  it.each([
+    ["tenant", tenantProfile],
+    ["landlord", landlordProfile],
+  ])("previews the authenticated %s owner's submitted document", async (_label, profile) => {
+    fetchMock
+      .mockResolvedValueOnce(response(profile))
+      .mockResolvedValueOnce(response(submitted))
+      .mockResolvedValueOnce(fileResponse());
+    const { unmount } = render(<VerificationClient />);
+
+    expect(await screen.findByLabelText("Preview of evidence.pdf")).toHaveAttribute("data", "blob:own-verification");
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:4000/verifications/me/documents/document-1", { credentials: "include" });
+    unmount();
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:own-verification");
+  });
 });
 
 const tenantProfile = {
@@ -123,6 +145,18 @@ const notSubmitted = {
   documents: [],
 };
 
+const submitted = {
+  ...notSubmitted,
+  id: "verification-1",
+  status: "PENDING",
+  createdAt: "2026-08-25T00:00:00.000Z",
+  documents: [{ id: "document-1", originalName: "evidence.pdf", mimeType: "application/pdf", sizeBytes: 100, createdAt: "2026-08-25T00:00:00.000Z" }],
+};
+
 function response(body: unknown): Response {
   return { ok: true, status: 200, json: async () => body } as Response;
+}
+
+function fileResponse(): Response {
+  return { ok: true, status: 200, blob: async () => new Blob(["document"], { type: "application/pdf" }) } as Response;
 }

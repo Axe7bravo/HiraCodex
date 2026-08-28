@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   BadgeCheck,
   ChevronRight,
-  CircleUserRound,
   FileQuestion,
   Heart,
   Home,
@@ -16,6 +15,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import { TenantStatus, TenantWorkspace } from "@/components/tenant-shell";
 import {
   apiRequest,
   apiUrl,
@@ -62,26 +62,11 @@ export function TenantDashboard({ profile, profileEditor, logout, signingOut }: 
   }, []);
 
   return (
-    <div className="tenant-dashboard-shell">
-      <aside className="tenant-dashboard-nav">
-        <p>Tenant menu</p>
-        <nav aria-label="Tenant account navigation">
-          <Link className="active" href="/account"><Home aria-hidden="true" /> Overview</Link>
-          <Link href="/account/favourites"><Heart aria-hidden="true" /> Saved properties</Link>
-          <Link href="/account/inquiries"><MessageCircleMore aria-hidden="true" /> Inquiries</Link>
-          <Link href="/account/requests"><FileQuestion aria-hidden="true" /> My requests</Link>
-          <Link href="/account/verification"><ShieldCheck aria-hidden="true" /> Verification</Link>
-          <Link href="#profile-settings"><CircleUserRound aria-hidden="true" /> Profile</Link>
-        </nav>
-        <Link className="tenant-nav-search" href="/properties">
-          <Search aria-hidden="true" />
-          <span><strong>Find your next room</strong><small>Browse approved properties</small></span>
-        </Link>
+    <TenantWorkspace footer={
         <button type="button" onClick={logout} disabled={signingOut}>
           <LogOut aria-hidden="true" /> {signingOut ? "Signing out…" : "Sign out"}
         </button>
-      </aside>
-
+      }>
       <div className="tenant-dashboard-main">
         <header className="tenant-dashboard-heading">
           <div>
@@ -151,7 +136,7 @@ export function TenantDashboard({ profile, profileEditor, logout, signingOut }: 
           {profileEditor}
         </section>
       </div>
-    </div>
+    </TenantWorkspace>
   );
 }
 
@@ -173,7 +158,7 @@ function ActivityPanel({ title, href, empty, loading, children }: { title: strin
 }
 
 function ActivityRow({ title, status }: { title: string; status: string }) {
-  return <div className="tenant-activity-row"><span>{title}</span><strong>{status.replaceAll("_", " ")}</strong></div>;
+  return <div className="tenant-activity-row"><span>{title}</span><TenantStatus status={status} /></div>;
 }
 
 function DashboardEmpty({ title, copy, href, action }: { title: string; copy: string; href: string; action: string }) {

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, UserProfile, VerificationSubmission } from "@/lib/api";
+import { TenantStatus, TenantWorkspace } from "@/components/tenant-shell";
+import { VerificationDocumentPreview } from "@/components/verification-document-preview";
 
 const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
 const maxBytes = 10 * 1024 * 1024;
@@ -77,7 +79,7 @@ export function VerificationClient() {
     }
   }
 
-  if (loading) return <p className="account-state">Loading verification…</p>;
+  if (loading) return <div className="account-shell profile-shell"><p className="account-state">Loading verification…</p></div>;
   if (error && (!profile || !verification)) {
     return (
       <p className="account-state form-error" role="alert">
@@ -98,9 +100,9 @@ export function VerificationClient() {
     verification.status === "REJECTED";
   const landlord = profile.role === "LANDLORD";
 
-  return (
-    <section className="account-card profile-card verification-card">
-      <div>
+  const card = (
+    <section className={landlord ? "account-card profile-card verification-card" : "tenant-account-page tenant-verification-page"}>
+      <div className={landlord ? undefined : "tenant-page-heading"}>
         <p className="eyebrow">Private document verification</p>
         <h1>
           {landlord
@@ -114,10 +116,8 @@ export function VerificationClient() {
         </p>
       </div>
 
-      <div
-        className={`verification-status status-${verification.status.toLowerCase()}`}
-      >
-        <strong>{statusLabel(verification.status)}</strong>
+      <div className={landlord ? `verification-status status-${verification.status.toLowerCase()}` : "tenant-verification-status"}>
+        {landlord ? <strong>{statusLabel(verification.status)}</strong> : <TenantStatus status={verification.status} />}
         {verification.createdAt && (
           <span>
             Submitted {new Date(verification.createdAt).toLocaleDateString()}
@@ -132,18 +132,16 @@ export function VerificationClient() {
       )}
 
       {verification.documents.length > 0 && (
-        <ul className="document-list">
+        <section className="submitted-document-section" aria-labelledby="submitted-documents-title">
+          <div><p className="eyebrow">Private evidence</p><h2 id="submitted-documents-title">Your submitted document{verification.documents.length === 1 ? "" : "s"}</h2></div>
+          <ul className="document-list">
           {verification.documents.map((document) => (
             <li key={document.id}>
-              <span>
-                {document.originalName ?? "Previously submitted document"}
-              </span>
-              {document.sizeBytes !== null && (
-                <small>{formatBytes(document.sizeBytes)}</small>
-              )}
+              <VerificationDocumentPreview endpoint={`/verifications/me/documents/${document.id}`} document={document} context="Your verification evidence" />
             </li>
           ))}
-        </ul>
+          </ul>
+        </section>
       )}
 
       {canSubmit && (
@@ -159,9 +157,7 @@ export function VerificationClient() {
             <small>PDF, JPEG, or PNG. Maximum 10 MB per file.</small>
           </label>
           {files.length > 0 && (
-            <p>
-              {files.length} document{files.length === 1 ? "" : "s"} selected.
-            </p>
+            <SelectedFiles files={files} />
           )}
           {error && (
             <p className="form-error" role="alert">
@@ -185,6 +181,17 @@ export function VerificationClient() {
       <Link href="/account">Back to profile</Link>
     </section>
   );
+  return landlord ? <div className="account-shell profile-shell">{card}</div> : <div className="account-overview-shell"><TenantWorkspace>{card}</TenantWorkspace></div>;
+}
+
+function SelectedFiles({ files }: { files: File[] }) {
+  const [previews, setPreviews] = useState<{ name: string; type: string; url?: string }[]>([]);
+  useEffect(() => {
+    const next = files.map((file) => ({ name: file.name, type: file.type, url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined }));
+    setPreviews(next);
+    return () => next.forEach((preview) => { if (preview.url) URL.revokeObjectURL(preview.url); });
+  }, [files]);
+  return <div className="tenant-selected-files" aria-live="polite">{previews.map((preview) => <article key={preview.name}>{preview.url ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={preview.url} alt={`Selected verification evidence: ${preview.name}`} /></> : <span>PDF</span>}<div><strong>{preview.name}</strong><small>{preview.type}</small></div></article>)}</div>;
 }
 
 function statusLabel(status: VerificationSubmission["status"]): string {
@@ -194,10 +201,4 @@ function statusLabel(status: VerificationSubmission["status"]): string {
     APPROVED: "Approved",
     REJECTED: "Changes required",
   }[status];
-}
-
-function formatBytes(bytes: number): string {
-  return bytes < 1024 * 1024
-    ? `${Math.ceil(bytes / 1024)} KB`
-    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

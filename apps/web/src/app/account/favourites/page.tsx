@@ -1,8 +1,5 @@
 import { SavedProperties } from "./saved-properties";
+import { TenantShell } from "@/components/tenant-shell";
 export default function FavouritesPage() {
-  return (
-    <main className="discovery-page">
-      <SavedProperties />
-    </main>
-  );
+  return <TenantShell><SavedProperties /></TenantShell>;
 }
