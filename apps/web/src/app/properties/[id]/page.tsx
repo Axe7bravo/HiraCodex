@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { PropertyDetail } from "./property-detail";
 
@@ -13,6 +14,7 @@ export default async function PropertyDetailPage({
       <main className="property-detail-page">
         <PropertyDetail propertyId={id} />
       </main>
+      <SiteFooter />
     </>
   );
 }

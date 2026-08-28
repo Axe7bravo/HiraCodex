@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { HomeLanding } from "./home-landing";
 
@@ -10,9 +11,12 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <main className="home-page home-marketplace">
+    <div className="home-page home-marketplace">
       <SiteHeader />
-      <HomeLanding />
-    </main>
+      <main>
+        <HomeLanding />
+      </main>
+      <SiteFooter />
+    </div>
   );
 }
