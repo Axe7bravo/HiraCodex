@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { Building2, GraduationCap } from "lucide-react";
 import { apiRequest, SafeUser } from "@/lib/api";
 
 type Role = "TENANT" | "LANDLORD";
@@ -50,6 +51,20 @@ export function RegisterForm() {
 
   return (
     <form className="auth-form" onSubmit={submit}>
+      <fieldset className="role-picker">
+        <legend>I want to use Hira as</legend>
+        <label className={role === "TENANT" ? "role-option selected" : "role-option"}>
+          <input type="radio" name="role" value="TENANT" checked={role === "TENANT"} onChange={() => setRole("TENANT")} />
+          <span className="role-icon" aria-hidden="true"><GraduationCap /></span>
+          <span><strong>Student / Tenant</strong><small>Find student accommodation</small></span>
+        </label>
+        <label className={role === "LANDLORD" ? "role-option selected" : "role-option"}>
+          <input type="radio" name="role" value="LANDLORD" checked={role === "LANDLORD"} onChange={() => setRole("LANDLORD")} />
+          <span className="role-icon" aria-hidden="true"><Building2 /></span>
+          <span><strong>Landlord</strong><small>List and manage properties</small></span>
+        </label>
+      </fieldset>
+
       <div className="field-row">
         <label>
           First name
@@ -103,44 +118,6 @@ export function RegisterForm() {
           maxLength={128}
         />
       </label>
-
-      <fieldset className="role-picker">
-        <legend>I want to use Hira as</legend>
-        <label
-          className={role === "TENANT" ? "role-option selected" : "role-option"}
-        >
-          <input
-            type="radio"
-            name="role"
-            value="TENANT"
-            checked={role === "TENANT"}
-            onChange={() => setRole("TENANT")}
-          />
-          <span className="role-icon" aria-hidden="true">
-            ⌂
-          </span>
-          <strong>Student / Tenant</strong>
-          <small>Find trusted student housing</small>
-        </label>
-        <label
-          className={
-            role === "LANDLORD" ? "role-option selected" : "role-option"
-          }
-        >
-          <input
-            type="radio"
-            name="role"
-            value="LANDLORD"
-            checked={role === "LANDLORD"}
-            onChange={() => setRole("LANDLORD")}
-          />
-          <span className="role-icon" aria-hidden="true">
-            ▤
-          </span>
-          <strong>Landlord</strong>
-          <small>List and manage properties</small>
-        </label>
-      </fieldset>
 
       {error && (
         <p className="form-error" role="alert">
