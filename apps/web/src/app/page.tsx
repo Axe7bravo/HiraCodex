@@ -1,34 +1,18 @@
-import { ApiStatus } from "./status/api-status";
-import Link from "next/link";
+import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
+import { HomeLanding } from "./home-landing";
+
+export const metadata: Metadata = {
+  title: "Hira | Trusted student housing in Maseru",
+  description:
+    "Discover approved student accommodation in Maseru and connect with verified landlords.",
+};
 
 export default function Home() {
   return (
-    <main className="home-page">
+    <main className="home-page home-marketplace">
       <SiteHeader />
-      <section className="home-hero">
-        <div>
-          <p className="eyebrow">Verified student housing in Maseru</p>
-          <h1>A trusted place to begin your housing search.</h1>
-          <p>
-            Hira connects students and landlords through a safer, clearer
-            marketplace.
-          </p>
-          <div className="hero-actions">
-            <Link className="button" href="/register">
-              Create account
-            </Link>
-            <Link className="button button-outline" href="/login">
-              Sign in
-            </Link>
-          </div>
-        </div>
-        <aside className="status-card" aria-labelledby="status-title">
-          <p className="eyebrow">Development diagnostic</p>
-          <h2 id="status-title">Platform connection</h2>
-          <ApiStatus />
-        </aside>
-      </section>
+      <HomeLanding />
     </main>
   );
 }
