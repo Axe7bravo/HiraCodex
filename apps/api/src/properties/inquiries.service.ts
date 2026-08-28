@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   InquiryStatus,
@@ -12,6 +13,7 @@ import {
   VerificationType,
 } from '@prisma/client';
 import { EmailService } from '../auth/email.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import type { LandlordInquiryTargetStatus } from './dto/update-inquiry-status.dto';
@@ -65,6 +67,7 @@ export class InquiriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async create(tenantId: string, propertyId: string, input: CreateInquiryDto) {
@@ -94,6 +97,12 @@ export class InquiriesService {
         select: inquiryBaseSelect,
       });
       return { inquiry, landlordEmail: property.landlordEmail };
+    });
+
+    this.analytics?.capture('inquiry_created', tenantId, {
+      userId: tenantId,
+      propertyId: result.inquiry.propertyId,
+      inquiryId: result.inquiry.id,
     });
 
     try {

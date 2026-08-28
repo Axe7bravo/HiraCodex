@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -16,6 +17,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
@@ -65,6 +67,7 @@ export class PropertiesService {
     private readonly prisma: PrismaService,
     @Inject(PROPERTY_PHOTO_STORAGE)
     private readonly storage: PropertyPhotoStorage,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   mine(landlordId: string) {
@@ -77,8 +80,8 @@ export class PropertiesService {
     });
   }
 
-  create(landlordId: string, input: CreatePropertyDto) {
-    return this.prisma.property.create({
+  async create(landlordId: string, input: CreatePropertyDto) {
+    const property = await this.prisma.property.create({
       data: {
         landlordId,
         ...this.propertyData(input),
@@ -88,6 +91,11 @@ export class PropertiesService {
         photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
       },
     });
+    this.analytics?.capture('property_created', landlordId, {
+      landlordId,
+      propertyId: property.id,
+    });
+    return property;
   }
 
   async update(id: string, landlordId: string, input: UpdatePropertyDto) {
@@ -317,7 +325,7 @@ export class PropertiesService {
   }
 
   async submitReview(id: string, landlordId: string, role: UserRole) {
-    return this.prisma.$transaction(
+    const property = await this.prisma.$transaction(
       async (transaction) => {
         const property = await transaction.property.findFirst({
           where: { id, landlordId },
@@ -375,6 +383,11 @@ export class PropertiesService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+    this.analytics?.capture('property_submitted_for_review', landlordId, {
+      landlordId,
+      propertyId: property.id,
+    });
+    return property;
   }
 
   private async requireManageableProperty(id: string, landlordId: string) {

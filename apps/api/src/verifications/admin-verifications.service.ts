@@ -6,8 +6,15 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import { Prisma, VerificationStatus, VerificationType } from '@prisma/client';
+import {
+  Prisma,
+  UserRole,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { EmailService } from '../auth/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
@@ -41,6 +48,7 @@ export class AdminVerificationsService {
     private readonly email: EmailService,
     @Inject(VERIFICATION_DOCUMENT_STORAGE)
     private readonly storage: VerificationDocumentStorage,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async list(type?: VerificationType) {
@@ -155,8 +163,24 @@ export class AdminVerificationsService {
           },
         },
       });
-      return { email: current.user.email, status: input.status };
+      return {
+        email: current.user.email,
+        status: input.status,
+        userId: current.userId,
+        type: current.type,
+      };
     });
+
+    if (result.status === VerificationStatus.APPROVED) {
+      const role =
+        result.type === VerificationType.STUDENT
+          ? UserRole.TENANT
+          : UserRole.LANDLORD;
+      this.analytics?.capture('verification_approved', result.userId, {
+        userId: result.userId,
+        role,
+      });
+    }
 
     try {
       if (result.status === VerificationStatus.APPROVED) {

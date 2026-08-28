@@ -6,9 +6,11 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, PropertyStatus } from '@prisma/client';
 import { EmailService } from '../auth/email.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewPropertyDto } from './dto/review-property.dto';
 import { PROPERTY_PHOTO_STORAGE } from './property-photo-storage';
@@ -42,6 +44,7 @@ export class AdminPropertiesService {
     private readonly email: EmailService,
     @Inject(PROPERTY_PHOTO_STORAGE)
     private readonly storage: PropertyPhotoStorage,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async list() {
@@ -157,8 +160,19 @@ export class AdminPropertiesService {
           },
         },
       });
-      return { email: current.landlord.email, status: input.status };
+      return {
+        email: current.landlord.email,
+        status: input.status,
+        landlordId: current.landlordId,
+      };
     });
+
+    if (result.status === PropertyStatus.ACTIVE) {
+      this.analytics?.capture('property_approved', result.landlordId, {
+        propertyId: id,
+        landlordId: result.landlordId,
+      });
+    }
 
     try {
       if (result.status === PropertyStatus.ACTIVE) {

@@ -116,6 +116,10 @@ Do not build financial dashboards.
 - end-to-end smoke tests;
 - deployment docs.
 
+Analytics uses the explicit, privacy-minimised events documented in
+`docs/implementation/ANALYTICS.md` and remains disabled when provider
+configuration is absent.
+
 ## Development rule
 
 Each milestone should be a small set of reviewable commits. Do not start the next major module until the current vertical slice works end to end and its code path can be explained from UI -> API -> service -> database -> response.

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -29,10 +29,12 @@ import {
   type PublicPropertyDetail,
   type UserProfile,
 } from "@/lib/api";
+import { trackAnalytics } from "@/lib/analytics";
 
 type Viewer = "loading" | "guest" | "tenant" | "other";
 
 export function PropertyDetail({ propertyId }: { propertyId: string }) {
+  const trackedPropertyId = useRef<string | null>(null);
   const [property, setProperty] = useState<PublicPropertyDetail | null>(null);
   const [viewer, setViewer] = useState<Viewer>("loading");
   const [saved, setSaved] = useState(false);
@@ -57,6 +59,14 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
         `/discovery/properties/${propertyId}`,
       );
       setProperty(detail);
+      if (trackedPropertyId.current !== detail.id) {
+        trackedPropertyId.current = detail.id;
+        trackAnalytics("property_viewed", {
+          propertyId: detail.id,
+          roomType: detail.roomType,
+          area: detail.area,
+        });
+      }
       try {
         const user = await apiRequest<UserProfile>("/users/me");
         if (user.role !== "TENANT") return setViewer("other");

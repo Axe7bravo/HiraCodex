@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { trackAnalytics } from "@/lib/analytics";
 import { PropertyDiscovery } from "./property-discovery";
 
 const push = jest.fn();
@@ -9,6 +10,9 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => params,
 }));
+jest.mock("@/lib/analytics", () => ({ trackAnalytics: jest.fn() }));
+
+const trackAnalyticsMock = jest.mocked(trackAnalytics);
 
 describe("PropertyDiscovery", () => {
   const fetchMock = jest.fn();
@@ -18,6 +22,7 @@ describe("PropertyDiscovery", () => {
     window.history.replaceState({}, "", "/properties");
     push.mockReset();
     fetchMock.mockReset();
+    trackAnalyticsMock.mockReset();
     Object.defineProperty(global, "fetch", {
       configurable: true,
       value: fetchMock,
@@ -26,7 +31,7 @@ describe("PropertyDiscovery", () => {
 
   it("shows loading then renders an active listing card and safe photo route", async () => {
     fetchMock.mockResolvedValue(response(page([listing])));
-    render(<PropertyDiscovery />);
+    const view = render(<PropertyDiscovery />);
 
     expect(screen.getByText("Loading approved homes…")).toBeInTheDocument();
     expect(await screen.findByText("Roma garden room")).toBeInTheDocument();
@@ -38,6 +43,31 @@ describe("PropertyDiscovery", () => {
     );
     expect(screen.getAllByText("Wi-Fi")).toHaveLength(2);
     expect(screen.queryByText("Hira approved")).not.toBeInTheDocument();
+    expect(trackAnalyticsMock).toHaveBeenCalledWith("property_search", {
+      filtersActive: false,
+      resultCount: 1,
+    });
+
+    view.rerender(<PropertyDiscovery />);
+    expect(trackAnalyticsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("tracks only allow-listed structured discovery filters", async () => {
+    params = new URLSearchParams(
+      "area=Roma&nearestInstitution=National+University+of+Lesotho&roomType=Studio",
+    );
+    fetchMock.mockResolvedValue(response(page([])));
+
+    render(<PropertyDiscovery />);
+    await screen.findByText("No homes match these filters");
+
+    expect(trackAnalyticsMock).toHaveBeenCalledWith("property_search", {
+      area: "Roma",
+      nearestInstitution: "National University of Lesotho",
+      roomType: "Studio",
+      filtersActive: true,
+      resultCount: 0,
+    });
   });
 
   it("maps dropdown, calendar, amenity and price controls to existing query state", async () => {

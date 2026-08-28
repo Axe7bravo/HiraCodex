@@ -7,6 +7,7 @@ import {
   Logger,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -16,6 +17,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { VERIFICATION_DOCUMENT_STORAGE } from './verification-document-storage';
 import type { VerificationDocumentStorage } from './verification-document-storage';
 
@@ -58,6 +60,7 @@ export class VerificationsService {
     private readonly prisma: PrismaService,
     @Inject(VERIFICATION_DOCUMENT_STORAGE)
     private readonly storage: VerificationDocumentStorage,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async getMine(userId: string, role: UserRole) {
@@ -127,7 +130,7 @@ export class VerificationsService {
         });
       }
 
-      return await this.prisma.$transaction(
+      const verification = await this.prisma.$transaction(
         async (transaction) => {
           await this.assertCanSubmit(transaction, userId, type);
           return transaction.verification.create({
@@ -142,6 +145,11 @@ export class VerificationsService {
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+      this.analytics?.capture('verification_submitted', userId, {
+        userId,
+        role,
+      });
+      return verification;
     } catch (error) {
       await this.cleanup(attemptedKeys);
       if (

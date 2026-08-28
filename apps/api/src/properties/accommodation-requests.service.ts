@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   AccommodationRequestStatus,
@@ -13,6 +14,7 @@ import {
   VerificationType,
 } from '@prisma/client';
 import { EmailService } from '../auth/email.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccommodationRequestDto } from './dto/create-accommodation-request.dto';
 
@@ -76,6 +78,7 @@ export class AccommodationRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async create(
@@ -109,6 +112,11 @@ export class AccommodationRequestsService {
           select: requestBaseSelect,
         });
       return { accommodationRequest, landlordEmail: property.landlordEmail };
+    });
+    this.analytics?.capture('accommodation_request_created', tenantId, {
+      userId: tenantId,
+      propertyId: result.accommodationRequest.propertyId,
+      requestId: result.accommodationRequest.id,
     });
     try {
       await this.email.sendNewAccommodationRequest(result.landlordEmail);
@@ -174,6 +182,16 @@ export class AccommodationRequestsService {
         'Accommodation request transition is not allowed',
       );
     if (changed.count > 0) {
+      this.analytics?.capture(
+        target === AccommodationRequestStatus.ACCEPTED
+          ? 'accommodation_request_accepted'
+          : 'accommodation_request_declined',
+        landlordId,
+        {
+          propertyId: request.propertyId,
+          requestId: request.id,
+        },
+      );
       try {
         if (target === AccommodationRequestStatus.ACCEPTED)
           await this.email.sendAccommodationRequestAccepted(
@@ -214,6 +232,12 @@ export class AccommodationRequestsService {
       throw new ConflictException(
         'Accommodation request transition is not allowed',
       );
+    if (changed.count > 0) {
+      this.analytics?.capture('accommodation_request_cancelled', tenantId, {
+        propertyId: request.propertyId,
+        requestId: request.id,
+      });
+    }
     return request;
   }
 

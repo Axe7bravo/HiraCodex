@@ -80,13 +80,13 @@ describe('PropertiesService', () => {
     });
   });
 
-  it('rejects a non-positive price', () => {
-    expect(() =>
+  it('rejects a non-positive price', async () => {
+    await expect(
       service.create('landlord-1', {
         ...validInput(),
         monthlyPrice: '0',
       }),
-    ).toThrow(BadRequestException);
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(property.create).not.toHaveBeenCalled();
   });
 

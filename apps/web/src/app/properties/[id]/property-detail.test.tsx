@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { trackAnalytics } from "@/lib/analytics";
 import { PropertyDetail } from "./property-detail";
 
 jest.mock("next/image", () => ({
@@ -20,6 +21,9 @@ jest.mock("next/image", () => ({
     return <img {...props} />;
   },
 }));
+jest.mock("@/lib/analytics", () => ({ trackAnalytics: jest.fn() }));
+
+const trackAnalyticsMock = jest.mocked(trackAnalytics);
 
 const detail = {
   id: "property-1",
@@ -51,6 +55,7 @@ describe("PropertyDetail", () => {
 
   beforeEach(() => {
     fetchMock.mockReset();
+    trackAnalyticsMock.mockReset();
     Object.defineProperty(global, "fetch", {
       configurable: true,
       writable: true,
@@ -70,7 +75,7 @@ describe("PropertyDetail", () => {
     fetchMock
       .mockResolvedValueOnce(response(detail))
       .mockResolvedValueOnce(response({ message: "Unauthorized" }, 401));
-    render(<PropertyDetail propertyId="property-1" />);
+    const view = render(<PropertyDetail propertyId="property-1" />);
     expect(
       await screen.findByRole("heading", { name: detail.title }),
     ).toBeInTheDocument();
@@ -78,6 +83,14 @@ describe("PropertyDetail", () => {
     expect(
       screen.getByRole("link", { name: "Sign in to save or inquire" }),
     ).toHaveAttribute("href", "/login");
+    expect(trackAnalyticsMock).toHaveBeenCalledWith("property_viewed", {
+      propertyId: "property-1",
+      roomType: "Studio",
+      area: "Roma",
+    });
+
+    view.rerender(<PropertyDetail propertyId="property-1" />);
+    expect(trackAnalyticsMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets a tenant save and reconciles from the authoritative list", async () => {

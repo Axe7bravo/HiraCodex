@@ -33,6 +33,7 @@ import {
   type DiscoveryPage,
   type DiscoveryProperty,
 } from "@/lib/api";
+import { trackAnalytics } from "@/lib/analytics";
 import {
   discoveryAmenities,
   discoveryAreas,
@@ -91,6 +92,7 @@ export function PropertyDiscovery() {
     Boolean(initialMaxPrice),
   );
   const datePickerRef = useRef<HTMLInputElement>(null);
+  const trackedQueries = useRef(new Set<string>());
   const priceRangeStyle: CSSProperties &
     Record<"--range-start" | "--range-end", string> = {
     "--range-start": `${pricePercent(minPrice)}%`,
@@ -140,6 +142,30 @@ export function PropertyDiscovery() {
         if (!current) return;
         setResult(data);
         setError(null);
+        if (!trackedQueries.current.has(query)) {
+          trackedQueries.current.add(query);
+          const trackedParams = new URLSearchParams(query);
+          const trackedArea = trackedParams.get("area");
+          const trackedInstitution = trackedParams.get("nearestInstitution");
+          const trackedRoomType = trackedParams.get("roomType");
+          trackAnalytics("property_search", {
+            ...(trackedArea && discoveryAreas.some((area) => area === trackedArea)
+              ? { area: trackedArea }
+              : {}),
+            ...(trackedInstitution &&
+            discoveryInstitutions.some(
+              (institution) => institution === trackedInstitution,
+            )
+              ? { nearestInstitution: trackedInstitution }
+              : {}),
+            ...(trackedRoomType &&
+            discoveryRoomTypes.some((roomType) => roomType === trackedRoomType)
+              ? { roomType: trackedRoomType }
+              : {}),
+            filtersActive: trackedParams.size > 0,
+            resultCount: data.total,
+          });
+        }
       })
       .catch((cause: unknown) => {
         if (!current) return;

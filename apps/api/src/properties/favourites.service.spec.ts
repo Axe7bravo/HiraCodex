@@ -9,7 +9,8 @@ describe('FavouritesService', () => {
     deleteMany: jest.fn(),
   };
   const prisma = { favourite, $executeRaw: jest.fn() };
-  const service = new FavouritesService(prisma as never);
+  const analytics = { capture: jest.fn() };
+  const service = new FavouritesService(prisma as never, analytics as never);
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -49,6 +50,11 @@ describe('FavouritesService', () => {
         },
       }),
     );
+    expect(analytics.capture).toHaveBeenCalledWith(
+      'favourite_added',
+      'tenant-1',
+      { userId: 'tenant-1', propertyId: 'property-1' },
+    );
   });
 
   it('does not expose a nonexistent or non-ACTIVE property', async () => {
@@ -65,5 +71,10 @@ describe('FavouritesService', () => {
     expect(favourite.deleteMany).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-1', propertyId: 'property-1' },
     });
+    expect(analytics.capture).toHaveBeenCalledWith(
+      'favourite_removed',
+      'tenant-1',
+      { userId: 'tenant-1', propertyId: 'property-1' },
+    );
   });
 });

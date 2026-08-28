@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -10,6 +11,7 @@ import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import {
   FORGOT_PASSWORD_MESSAGE,
   INVALID_RESET_TOKEN_MESSAGE,
@@ -32,6 +34,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly email: EmailService,
+    @Optional() private readonly analytics?: AnalyticsService,
   ) {}
 
   async register(input: RegisterDto) {
@@ -41,7 +44,7 @@ export class AuthService {
     });
 
     try {
-      return await this.prisma.user.create({
+      const user = await this.prisma.user.create({
         data: {
           firstName: input.firstName,
           lastName: input.lastName,
@@ -55,6 +58,11 @@ export class AuthService {
         },
         select: safeUserSelect,
       });
+      this.analytics?.capture('registration_completed', user.id, {
+        userId: user.id,
+        role: user.role,
+      });
+      return user;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
