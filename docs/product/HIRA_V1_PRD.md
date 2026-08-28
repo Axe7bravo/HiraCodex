@@ -347,6 +347,7 @@ Primary V1 tenant: tertiary student seeking safe, affordable accommodation in or
 - Admin may pause/deactivate a listing.
 - Admin actions affecting status must be auditable at least by actor and timestamp.
 - Rejected listing/verification can carry a reason.
+- ADMIN self-review is permitted in V1 and remains audited. ADMIN-owned listings still follow the normal DRAFT → PENDING_REVIEW → ACTIVE or REJECTED lifecycle.
 
 # 7. UX Requirements
 

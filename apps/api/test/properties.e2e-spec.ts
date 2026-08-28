@@ -281,6 +281,111 @@ describe('Landlord property management (e2e)', () => {
       .expect(404);
   });
 
+  it('keeps ADMIN-owned listings in the audited review lifecycle', async () => {
+    const admin = await authenticatedAdminAgent('self-review-admin');
+
+    const approvedProperty = getBody<PropertyBody>(
+      await admin
+        .post('/properties')
+        .send(validProperty('Admin self-approved property'))
+        .expect(201),
+    );
+    expect(approvedProperty.status).toBe(PropertyStatus.DRAFT);
+    for (const { name, contents } of validPhotos()) {
+      await admin
+        .post(`/properties/${approvedProperty.id}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await admin
+      .post(`/properties/${approvedProperty.id}/submit-review`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect((body as { status: PropertyStatus }).status).toBe(
+          PropertyStatus.PENDING_REVIEW,
+        );
+      });
+    await admin
+      .patch(`/admin/properties/${approvedProperty.id}`)
+      .send({ status: PropertyStatus.ACTIVE })
+      .expect(200);
+
+    expect(
+      await prisma.auditLog.findFirstOrThrow({
+        where: {
+          action: 'PROPERTY_APPROVED',
+          targetType: 'Property',
+          targetId: approvedProperty.id,
+        },
+        select: { actorId: true, metadata: true },
+      }),
+    ).toMatchObject({
+      actorId: approvedProperty.landlordId,
+      metadata: {
+        propertyId: approvedProperty.id,
+        landlordUserId: approvedProperty.landlordId,
+        previousStatus: PropertyStatus.PENDING_REVIEW,
+        newStatus: PropertyStatus.ACTIVE,
+      },
+    });
+
+    await admin
+      .patch(`/admin/properties/${approvedProperty.id}`)
+      .send({
+        status: PropertyStatus.REJECTED,
+        rejectionReason: 'A stale second decision must not succeed.',
+      })
+      .expect(409);
+
+    const rejectedProperty = getBody<PropertyBody>(
+      await admin
+        .post('/properties')
+        .send(validProperty('Admin self-rejected property'))
+        .expect(201),
+    );
+    for (const { name, contents } of validPhotos()) {
+      await admin
+        .post(`/properties/${rejectedProperty.id}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await admin
+      .post(`/properties/${rejectedProperty.id}/submit-review`)
+      .expect(201);
+    await admin
+      .patch(`/admin/properties/${rejectedProperty.id}`)
+      .send({
+        status: PropertyStatus.REJECTED,
+        rejectionReason: 'Replace the exterior photo.',
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          status: PropertyStatus.REJECTED,
+          rejectionReason: 'Replace the exterior photo.',
+        });
+      });
+
+    expect(
+      await prisma.auditLog.findFirstOrThrow({
+        where: {
+          action: 'PROPERTY_REJECTED',
+          targetType: 'Property',
+          targetId: rejectedProperty.id,
+        },
+        select: { actorId: true, metadata: true },
+      }),
+    ).toMatchObject({
+      actorId: rejectedProperty.landlordId,
+      metadata: {
+        propertyId: rejectedProperty.id,
+        landlordUserId: rejectedProperty.landlordId,
+        previousStatus: PropertyStatus.PENDING_REVIEW,
+        newStatus: PropertyStatus.REJECTED,
+      },
+    });
+  });
+
   it('creates, lists and edits only the authenticated landlord draft', async () => {
     const owner = await authenticatedAgent('owner', UserRole.LANDLORD);
     const created = await owner

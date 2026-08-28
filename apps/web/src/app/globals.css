@@ -111,6 +111,28 @@
   color: var(--muted-foreground);
   font-size: 0.78rem;
 }
+.admin-self-review-notice {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid #e6c35c;
+  border-left: 4px solid #c58b00;
+  border-radius: 0.75rem;
+  background: #fff9e8;
+  padding: 0.85rem 1rem;
+}
+.admin-self-review-notice strong,
+.admin-self-review-notice p {
+  margin: 0;
+}
+.admin-self-review-notice strong {
+  color: #664800;
+  font-size: 0.82rem;
+}
+.admin-self-review-notice p {
+  color: #5d5540;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
 .admin-status {
   display: inline-flex;
   align-items: center;

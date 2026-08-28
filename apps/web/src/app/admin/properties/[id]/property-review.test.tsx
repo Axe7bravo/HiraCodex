@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { AdminPropertyReview } from "./property-review";
 
 describe("AdminPropertyReview", () => {
@@ -15,6 +21,7 @@ describe("AdminPropertyReview", () => {
   it("approves a pending property and disables further decisions", async () => {
     fetchMock
       .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response(adminProfile))
       .mockResolvedValueOnce(
         response({ ...detail, status: "ACTIVE", review: review }),
       );
@@ -23,7 +30,7 @@ describe("AdminPropertyReview", () => {
       await screen.findByRole("button", { name: "Approve and activate" }),
     );
     await waitFor(() => expect(screen.getByText("ACTIVE")).toBeInTheDocument());
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({
       method: "PATCH",
       body: JSON.stringify({ status: "ACTIVE" }),
     });
@@ -33,14 +40,17 @@ describe("AdminPropertyReview", () => {
   });
 
   it("requires and sends a rejection reason", async () => {
-    fetchMock.mockResolvedValueOnce(response(detail)).mockResolvedValueOnce(
-      response({
-        ...detail,
-        status: "REJECTED",
-        rejectionReason: "Add clearer photos.",
-        review,
-      }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response(adminProfile))
+      .mockResolvedValueOnce(
+        response({
+          ...detail,
+          status: "REJECTED",
+          rejectionReason: "Add clearer photos.",
+          review,
+        }),
+      );
     render(<AdminPropertyReview id="property-1" />);
     const reason = await screen.findByLabelText("Rejection reason");
     fireEvent.change(reason, { target: { value: "Add clearer photos." } });
@@ -48,10 +58,43 @@ describe("AdminPropertyReview", () => {
     expect(
       await screen.findByText("Reason: Add clearer photos."),
     ).toBeInTheDocument();
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
       status: "REJECTED",
       rejectionReason: "Add clearer photos.",
     });
+  });
+
+  it("warns an admin reviewing their own pending listing", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        response({
+          ...detail,
+          landlordId: "admin-1",
+          landlord: { ...landlord, id: "admin-1" },
+        }),
+      )
+      .mockResolvedValueOnce(response(adminProfile));
+
+    render(<AdminPropertyReview id="property-1" />);
+
+    const note = await screen.findByRole("note");
+    expect(within(note).getByText("You own this listing.")).toBeInTheDocument();
+    expect(
+      within(note).getByText(
+        "You can review it for V1, but this decision will be recorded in the audit log.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the self-review warning for another landlord's listing", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(detail))
+      .mockResolvedValueOnce(response(adminProfile));
+
+    render(<AdminPropertyReview id="property-1" />);
+
+    await screen.findByRole("button", { name: "Approve and activate" });
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });
 
@@ -98,6 +141,20 @@ const review = {
     lastName: "Reviewer",
     email: "admin@example.com",
   },
+};
+const adminProfile = {
+  id: "admin-1",
+  email: "admin@example.com",
+  firstName: "Admin",
+  lastName: "Reviewer",
+  role: "ADMIN",
+  status: "ACTIVE",
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+  phone: null,
+  contactMethod: null,
+  verificationStatus: "NOT_SUBMITTED",
+  adminProfile: null,
 };
 function response(body: unknown) {
   return { ok: true, status: 200, json: () => Promise.resolve(body) };

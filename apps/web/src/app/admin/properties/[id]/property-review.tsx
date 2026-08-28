@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { AdminPropertyDetail, ApiError, apiRequest, apiUrl } from "@/lib/api";
+import {
+  AdminPropertyDetail,
+  ApiError,
+  apiRequest,
+  apiUrl,
+  UserProfile,
+} from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
 
 export function AdminPropertyReview({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminPropertyDetail | null>(null);
+  const [reviewerId, setReviewerId] = useState("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,8 +37,14 @@ export function AdminPropertyReview({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    apiRequest<AdminPropertyDetail>(`/admin/properties/${id}`)
-      .then(setDetail)
+    Promise.all([
+      apiRequest<AdminPropertyDetail>(`/admin/properties/${id}`),
+      apiRequest<UserProfile>("/users/me"),
+    ])
+      .then(([property, reviewer]) => {
+        setDetail(property);
+        setReviewerId(reviewer.id);
+      })
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -66,6 +79,7 @@ export function AdminPropertyReview({ id }: { id: string }) {
       </p>
     );
   const pending = detail.status === "PENDING_REVIEW";
+  const selfReview = reviewerId === detail.landlordId;
   return (
     <section className="admin-work-card admin-review-card admin-detail-card">
       <header className="admin-page-heading">
@@ -126,6 +140,15 @@ export function AdminPropertyReview({ id }: { id: string }) {
         <p className="form-error" role="alert">
           {error}
         </p>
+      )}
+      {pending && selfReview && (
+        <aside className="admin-self-review-notice" role="note">
+          <strong>You own this listing.</strong>
+          <p>
+            You can review it for V1, but this decision will be recorded in the
+            audit log.
+          </p>
+        </aside>
       )}
       {pending && (
         <div className="review-actions">

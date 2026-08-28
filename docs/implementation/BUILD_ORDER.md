@@ -59,6 +59,8 @@ Build:
 - admin property approval;
 - active/inactive status.
 
+ADMIN self-review is permitted in V1 and remains audited; ADMIN-owned listings use the same submission and moderation lifecycle as other listings.
+
 Exit criteria: landlord creates a listing -> admin approves -> listing appears publicly.
 
 ## Milestone 4 — Discovery
