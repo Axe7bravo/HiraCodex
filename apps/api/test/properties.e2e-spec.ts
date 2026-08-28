@@ -244,8 +244,9 @@ describe('Landlord property management (e2e)', () => {
         .expect(201),
     );
     expect(
-      getBody<PropertyBody[]>(await admin.get('/properties/mine').expect(200))
-        .map(({ id }) => id),
+      getBody<PropertyBody[]>(
+        await admin.get('/properties/mine').expect(200),
+      ).map(({ id }) => id),
     ).toContain(adminProperty.id);
     for (const { name, contents } of validPhotos()) {
       await admin
@@ -260,12 +261,24 @@ describe('Landlord property management (e2e)', () => {
         expect((body as { status: string }).status).toBe('PENDING_REVIEW');
       });
 
-    const landlord = await authenticatedAgent('admin-scope-landlord', UserRole.LANDLORD);
-    const landlordProperty = getBody<PropertyBody>(
-      await landlord.post('/properties').send(validProperty('Landlord-owned property')).expect(201),
+    const landlord = await authenticatedAgent(
+      'admin-scope-landlord',
+      UserRole.LANDLORD,
     );
-    await admin.patch(`/properties/${landlordProperty.id}`).send({ title: 'Not admin-owned' }).expect(404);
-    await landlord.patch(`/properties/${adminProperty.id}`).send({ title: 'Not landlord-owned' }).expect(404);
+    const landlordProperty = getBody<PropertyBody>(
+      await landlord
+        .post('/properties')
+        .send(validProperty('Landlord-owned property'))
+        .expect(201),
+    );
+    await admin
+      .patch(`/properties/${landlordProperty.id}`)
+      .send({ title: 'Not admin-owned' })
+      .expect(404);
+    await landlord
+      .patch(`/properties/${adminProperty.id}`)
+      .send({ title: 'Not landlord-owned' })
+      .expect(404);
   });
 
   it('creates, lists and edits only the authenticated landlord draft', async () => {
@@ -306,6 +319,86 @@ describe('Landlord property management (e2e)', () => {
     });
   });
 
+  it('pauses only an owned ACTIVE property before editing and resubmission', async () => {
+    const owner = await authenticatedAgent('pause-owner', UserRole.LANDLORD);
+    const stranger = await authenticatedAgent(
+      'pause-stranger',
+      UserRole.LANDLORD,
+    );
+    const admin = await authenticatedAdminAgent('pause-admin');
+    const created = getBody<PropertyBody>(
+      await owner
+        .post('/properties')
+        .send(validProperty('Active pause property'))
+        .expect(201),
+    );
+    for (const { name, contents } of validPhotos()) {
+      await owner
+        .post(`/properties/${created.id}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await prisma.property.update({
+      where: { id: created.id },
+      data: { status: PropertyStatus.ACTIVE },
+    });
+
+    await owner
+      .patch(`/properties/${created.id}`)
+      .send({ title: 'Active listings remain read-only' })
+      .expect(409);
+    await stranger
+      .patch(`/properties/${created.id}`)
+      .send({ status: 'PAUSED' })
+      .expect(404);
+    await admin
+      .patch(`/properties/${created.id}`)
+      .send({ status: 'PAUSED' })
+      .expect(404);
+
+    await owner
+      .patch(`/properties/${created.id}`)
+      .send({ status: 'PAUSED' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ status: 'PAUSED' });
+      });
+    await owner
+      .patch(`/properties/${created.id}`)
+      .send({ title: 'Edited while paused' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          title: 'Edited while paused',
+          status: 'PAUSED',
+        });
+      });
+    await owner
+      .post(`/properties/${created.id}/submit-review`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ status: 'PENDING_REVIEW' });
+      });
+
+    const adminOwned = getBody<PropertyBody>(
+      await admin
+        .post('/properties')
+        .send(validProperty('Admin active pause property'))
+        .expect(201),
+    );
+    await prisma.property.update({
+      where: { id: adminOwned.id },
+      data: { status: PropertyStatus.ACTIVE },
+    });
+    await admin
+      .patch(`/properties/${adminOwned.id}`)
+      .send({ status: 'PAUSED' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ status: 'PAUSED' });
+      });
+  });
+
   it('rejects unsafe client-controlled and invalid values', async () => {
     const owner = await authenticatedAgent('validation', UserRole.LANDLORD);
     await owner
@@ -324,6 +417,17 @@ describe('Landlord property management (e2e)', () => {
       .post('/properties')
       .send({ ...validProperty(), title: '   ' })
       .expect(400);
+    for (const invalid of [
+      { roomType: 'Bespoke suite' },
+      { area: 'roma' },
+      { nearestInstitution: 'NUL' },
+      { amenities: ['Wi-Fi', 'Jacuzzi'] },
+    ]) {
+      await owner
+        .post('/properties')
+        .send({ ...validProperty(), ...invalid })
+        .expect(400);
+    }
 
     const created = await owner
       .post('/properties')
@@ -341,6 +445,22 @@ describe('Landlord property management (e2e)', () => {
     await owner
       .patch(`/properties/${propertyId}`)
       .send({ status: null })
+      .expect(400);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ roomType: 'Bespoke suite' })
+      .expect(400);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ area: 'roma' })
+      .expect(400);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ nearestInstitution: 'NUL' })
+      .expect(400);
+    await owner
+      .patch(`/properties/${propertyId}`)
+      .send({ amenities: ['Wi-Fi', 'Jacuzzi'] })
       .expect(400);
   });
 

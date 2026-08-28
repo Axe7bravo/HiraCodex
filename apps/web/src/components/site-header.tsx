@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiRequest, type UserProfile } from "@/lib/api";
 
-export function SiteHeader() {
+export function SiteHeader({ landlordContext = false }: { landlordContext?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<
@@ -44,6 +44,7 @@ export function SiteHeader() {
   const inAccount = pathname.startsWith("/account");
   const inAdmin = pathname.startsWith("/admin");
   const inLandlordWorkspace =
+    (pathname === "/account" && landlordContext) ||
     pathname.startsWith("/account/properties") ||
     pathname.startsWith("/account/inquiries") ||
     pathname.startsWith("/account/requests");
@@ -76,7 +77,7 @@ export function SiteHeader() {
             {authenticatedProfile.role === "ADMIN" ? (
               <>
                 <Link className={inAdminArea ? "site-header-current" : undefined} href="/account" aria-current={inAdminArea ? "page" : undefined}>Admin dashboard</Link>
-                <Link className={inLandlordWorkspace ? "site-header-current" : undefined} href="/account/properties" aria-current={inLandlordWorkspace ? "page" : undefined}>Landlord workspace</Link>
+                <Link className={inLandlordWorkspace ? "site-header-current" : undefined} href="/account?context=landlord" aria-current={inLandlordWorkspace ? "page" : undefined}>Landlord workspace</Link>
               </>
             ) : (
               <Link className={inAccount ? "site-header-current" : undefined} href="/account" aria-current={inAccount ? "page" : undefined}>{accountLabel}</Link>

@@ -15,6 +15,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
 import { AccommodationRequestsService } from './accommodation-requests.service';
 import { CreateAccommodationRequestDto } from './dto/create-accommodation-request.dto';
+import { DeclineAccommodationRequestDto } from './dto/decline-accommodation-request.dto';
 
 @Controller()
 @UseGuards(SessionAuthGuard, RolesGuard)
@@ -47,8 +48,12 @@ export class AccommodationRequestsController {
 
   @Patch('requests/:id/decline')
   @Roles(UserRole.LANDLORD, UserRole.ADMIN)
-  decline(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.requests.decide(request.user.id, id, 'DECLINED');
+  decline(
+    @Param('id') id: string,
+    @Body() input: DeclineAccommodationRequestDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.requests.decide(request.user.id, id, 'DECLINED', input.reason);
   }
 
   @Patch('requests/:id/cancel')

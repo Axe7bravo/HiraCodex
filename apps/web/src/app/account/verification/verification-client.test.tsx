@@ -2,6 +2,32 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { VerificationClient } from "./verification-client";
 
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/account/verification",
+}));
+
+const tenantProfile = {
+  id: "tenant-1",
+  email: "student@example.com",
+  firstName: "Mpho",
+  lastName: "Student",
+  role: "TENANT",
+  status: "ACTIVE",
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+  phone: null,
+  contactMethod: null,
+  verificationStatus: "NOT_SUBMITTED",
+  tenantProfile: { institution: null, expectedMoveIn: null },
+};
+
+const landlordProfile = {
+  ...tenantProfile,
+  id: "landlord-1",
+  role: "LANDLORD",
+  landlordProfile: { organisation: null, propertyCount: null },
+};
+
 describe("VerificationClient", () => {
   const fetchMock = jest.fn();
   const createObjectURLMock = jest.fn(() => "blob:own-verification");
@@ -35,7 +61,7 @@ describe("VerificationClient", () => {
     fireEvent.change(input, { target: { files: [studentCard] } });
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
-    await screen.findByText("Pending review");
+    expect(await screen.findByText("PENDING")).toBeInTheDocument();
     const [url, options] = fetchMock.mock.calls[2];
     expect(url).toBe("http://localhost:4000/verifications");
     expect(options.body).toBeInstanceOf(FormData);
@@ -56,7 +82,7 @@ describe("VerificationClient", () => {
       );
     render(<VerificationClient />);
 
-    expect(await screen.findByText("Changes required")).toBeInTheDocument();
+    expect(await screen.findByText("REJECTED")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Please upload a clearer image",
     );
@@ -88,7 +114,7 @@ describe("VerificationClient", () => {
         response({ ...notSubmitted, id: "verification-2", status: "PENDING" }),
       );
     render(<VerificationClient />);
-    await screen.findByText("Pending review");
+    expect(await screen.findByText("PENDING")).toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Submit for review" }),
@@ -112,28 +138,6 @@ describe("VerificationClient", () => {
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:own-verification");
   });
 });
-
-const tenantProfile = {
-  id: "tenant-1",
-  email: "student@example.com",
-  firstName: "Mpho",
-  lastName: "Student",
-  role: "TENANT",
-  status: "ACTIVE",
-  createdAt: "2026-08-01T00:00:00.000Z",
-  updatedAt: "2026-08-01T00:00:00.000Z",
-  phone: null,
-  contactMethod: null,
-  verificationStatus: "NOT_SUBMITTED",
-  tenantProfile: { institution: null, expectedMoveIn: null },
-};
-
-const landlordProfile = {
-  ...tenantProfile,
-  id: "landlord-1",
-  role: "LANDLORD",
-  landlordProfile: { organisation: null, propertyCount: null },
-};
 
 const notSubmitted = {
   id: null,

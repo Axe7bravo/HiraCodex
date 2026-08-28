@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiRequest, LandlordProperty } from "@/lib/api";
+import { apiRequest, apiUrl, LandlordProperty } from "@/lib/api";
+import { LandlordStatus } from "@/components/landlord-shell";
 
 export function PropertyList() {
   const [properties, setProperties] = useState<LandlordProperty[]>([]);
@@ -70,18 +71,18 @@ export function PropertyList() {
   }
 
   return (
-    <section className="account-card profile-card property-management">
-      <div className="profile-heading">
+    <section className="landlord-account-page property-management">
+      <div className="landlord-page-heading">
         <div>
           <p className="eyebrow">Landlord listings</p>
-          <h1>Your properties</h1>
-          <p>Create and manage draft or paused listings.</p>
+          <h1>My properties</h1>
+          <p>Manage each listing from draft through Hira review and publication.</p>
         </div>
         <Link className="button" href="/account/properties/new">
-          Create property
+          Create listing
         </Link>
       </div>
-      {loading && <p role="status">Loading your properties…</p>}
+      {loading && <p className="landlord-state" role="status">Loading your properties…</p>}
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -93,21 +94,22 @@ export function PropertyList() {
         </p>
       )}
       {!loading && !error && properties.length === 0 && (
-        <div className="property-empty">
-          <strong>No properties yet</strong>
-          <p>Start with a draft. Photos and review submission come later.</p>
+        <div className="landlord-empty-state">
+          <strong>List your first property on Hira.</strong>
+          <p>Create a draft, add photos, and submit it for review when it is ready.</p>
+          <Link className="button button-small" href="/account/properties/new">Create listing</Link>
         </div>
       )}
       {!loading && properties.length > 0 && (
         <ul className="landlord-property-list">
           {properties.map((property) => (
             <li key={property.id}>
-              <div>
-                <span
-                  className={`property-status status-${property.status.toLowerCase()}`}
-                >
-                  {statusLabel(property.status)}
-                </span>
+              <div className="landlord-listing-summary">
+                <div className="landlord-listing-thumb">
+                  {property.photos[0] ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={`${apiUrl}/properties/${property.id}/photos/${property.photos[0].id}`} alt="" /></> : <span aria-hidden="true">Hira.</span>}
+                </div>
+                <div>
+                <LandlordStatus status={property.status} />
                 <h2>{property.title}</h2>
                 <p>
                   {property.area}, {property.city} · M{property.monthlyPrice}
@@ -118,6 +120,9 @@ export function PropertyList() {
                   {property.availableFrom.slice(0, 10)}
                   {` · ${property.photos.length} photo${property.photos.length === 1 ? "" : "s"}`}
                 </small>
+                <p className="landlord-status-guidance">{statusGuidance(property.status)}</p>
+                {property.status === "REJECTED" && property.rejectionReason && <p className="landlord-rejection-note">Review feedback: {property.rejectionReason}</p>}
+                </div>
               </div>
               <div className="property-actions">
                 {isEditable(property.status) && (
@@ -125,7 +130,12 @@ export function PropertyList() {
                     className="button button-outline button-small"
                     href={`/account/properties/${property.id}/edit`}
                   >
-                    Edit
+                    Manage property
+                  </Link>
+                )}
+                {!isEditable(property.status) && (
+                  <Link className="button button-outline button-small" href={`/account/properties/${property.id}/edit`}>
+                    Manage property
                   </Link>
                 )}
                 {(property.status === "DRAFT" ||
@@ -152,19 +162,18 @@ export function PropertyList() {
           ))}
         </ul>
       )}
-      <Link href="/account">Back to profile</Link>
     </section>
   );
 }
 
-function statusLabel(status: LandlordProperty["status"]): string {
+function statusGuidance(status: LandlordProperty["status"]): string {
   return {
-    DRAFT: "Draft",
-    PAUSED: "Paused",
-    PENDING_REVIEW: "Pending review",
-    ACTIVE: "Active",
-    REJECTED: "Rejected",
-    INACTIVE: "Inactive",
+    DRAFT: "Continue editing and submit when the listing is ready.",
+    PAUSED: "Not visible to students. Open Manage property to edit and resubmit it.",
+    PENDING_REVIEW: "Awaiting review by the Hira team.",
+    ACTIVE: "Live on Hira and visible to students.",
+    REJECTED: "Update the listing using the review feedback, then resubmit.",
+    INACTIVE: "This listing is not currently visible on Hira.",
   }[status];
 }
 

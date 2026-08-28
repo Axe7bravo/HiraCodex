@@ -1,3 +1,5 @@
+// Canonical Hira V1 property vocabulary. Backend DTO enforcement mirrors these
+// values in apps/api/src/properties/property-options.ts.
 export const discoveryAreas = [
   "Ha Thetsane",
   "Khubetsoana",

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -36,6 +37,7 @@ const requestBaseSelect = {
   preferredMoveInDate: true,
   note: true,
   status: true,
+  declineReason: true,
   createdAt: true,
   updatedAt: true,
   property: { select: safePropertySummary },
@@ -133,7 +135,19 @@ export class AccommodationRequestsService {
     return requests.map((request) => this.toLandlordRequest(request));
   }
 
-  async decide(landlordId: string, id: string, target: LandlordDecision) {
+  async decide(
+    landlordId: string,
+    id: string,
+    target: LandlordDecision,
+    declineReason?: string,
+  ) {
+    const normalizedDeclineReason = declineReason?.trim();
+    if (
+      target === AccommodationRequestStatus.DECLINED &&
+      !normalizedDeclineReason
+    ) {
+      throw new BadRequestException('A decline reason is required');
+    }
     const changed = await this.prisma.accommodationRequest.updateMany({
       where: {
         id,
@@ -141,7 +155,13 @@ export class AccommodationRequestsService {
         property: { landlordId },
         status: AccommodationRequestStatus.PENDING,
       },
-      data: { status: target },
+      data: {
+        status: target,
+        declineReason:
+          target === AccommodationRequestStatus.DECLINED
+            ? normalizedDeclineReason
+            : null,
+      },
     });
     const request = await this.prisma.accommodationRequest.findFirst({
       where: { id, landlordId, property: { landlordId } },
@@ -162,6 +182,7 @@ export class AccommodationRequestsService {
         else
           await this.email.sendAccommodationRequestDeclined(
             request.tenant.email,
+            request.declineReason ?? normalizedDeclineReason ?? '',
           );
       } catch {
         this.logger.error(
@@ -175,7 +196,10 @@ export class AccommodationRequestsService {
   async cancel(tenantId: string, id: string) {
     const changed = await this.prisma.accommodationRequest.updateMany({
       where: { id, tenantId, status: AccommodationRequestStatus.PENDING },
-      data: { status: AccommodationRequestStatus.CANCELLED },
+      data: {
+        status: AccommodationRequestStatus.CANCELLED,
+        declineReason: null,
+      },
     });
     const request = await this.prisma.accommodationRequest.findFirst({
       where: { id, tenantId },

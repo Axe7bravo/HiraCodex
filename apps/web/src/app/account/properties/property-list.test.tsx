@@ -17,7 +17,7 @@ describe("PropertyList", () => {
     fetchMock.mockResolvedValue(response([]));
     render(<PropertyList />);
     expect(screen.getByText("Loading your properties…")).toBeInTheDocument();
-    expect(await screen.findByText("No properties yet")).toBeInTheDocument();
+    expect(await screen.findByText("List your first property on Hira.")).toBeInTheDocument();
   });
 
   it("pauses and deletes an owned draft", async () => {
@@ -28,7 +28,12 @@ describe("PropertyList", () => {
       .mockResolvedValueOnce(response(undefined, 200));
     render(<PropertyList />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
+    expect(await screen.findByRole("link", { name: "Manage property" })).toHaveAttribute(
+      "href",
+      "/account/properties/property-1/edit",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(await screen.findByText("Property paused.")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toBe(
       "http://localhost:4000/properties/property-1",

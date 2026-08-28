@@ -29,6 +29,7 @@ describe('Accommodation requests (e2e)', () => {
   let prisma: PrismaService;
   let activeId: string;
   let inactiveId: string;
+  let adminActiveId: string;
   let tenantAId: string;
   let tenantBId: string;
 
@@ -95,7 +96,18 @@ describe('Accommodation requests (e2e)', () => {
         'Other landlord room',
       ),
     });
-    await prisma.user.create({ data: userData('admin', UserRole.ADMIN, hash) });
+    const admin = await prisma.user.create({
+      data: userData('admin', UserRole.ADMIN, hash),
+    });
+    adminActiveId = (
+      await prisma.property.create({
+        data: propertyData(
+          admin.id,
+          PropertyStatus.ACTIVE,
+          'Admin-owned request room',
+        ),
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -104,7 +116,10 @@ describe('Accommodation requests (e2e)', () => {
     });
     await prisma.property.deleteMany({
       where: {
-        landlord: { email: { startsWith: `request-${runId}-landlord-` } },
+        OR: [
+          { landlord: { email: { startsWith: `request-${runId}-landlord-` } } },
+          { id: adminActiveId },
+        ],
       },
     });
     await prisma.verification.deleteMany({
@@ -206,11 +221,16 @@ describe('Accommodation requests (e2e)', () => {
         .expect(201),
     );
     await tenant.patch(`/requests/${created.id}/accept`).expect(403);
-    await admin.patch(`/requests/${created.id}/decline`).expect(404);
+    await admin
+      .patch(`/requests/${created.id}/decline`)
+      .send({ reason: 'Not available' })
+      .expect(404);
     await landlordB.patch(`/requests/${created.id}/accept`).expect(404);
     const decisions = await Promise.all([
       landlordA.patch(`/requests/${created.id}/accept`),
-      landlordA.patch(`/requests/${created.id}/decline`),
+      landlordA
+        .patch(`/requests/${created.id}/decline`)
+        .send({ reason: 'The requested date is unavailable.' }),
     ]);
     expect(decisions.map(({ status }) => status).sort()).toEqual([200, 409]);
     const stored = await prisma.accommodationRequest.findUniqueOrThrow({
@@ -220,6 +240,85 @@ describe('Accommodation requests (e2e)', () => {
       AccommodationRequestStatus.ACCEPTED,
       AccommodationRequestStatus.DECLINED,
     ]).toContain(stored.status);
+    expect(stored.declineReason).toBe(
+      stored.status === AccommodationRequestStatus.DECLINED
+        ? 'The requested date is unavailable.'
+        : null,
+    );
+  });
+
+  it('requires, persists, and safely returns a decline reason', async () => {
+    const tenant = await agent('tenant-a');
+    const landlord = await agent('landlord-a');
+    const otherLandlord = await agent('landlord-b');
+    const created = body<{ id: string }>(
+      await tenant
+        .post(`/properties/${activeId}/requests`)
+        .send({ preferredMoveInDate: '2026-11-15' })
+        .expect(201),
+    );
+    await landlord.patch(`/requests/${created.id}/decline`).expect(400);
+    await landlord
+      .patch(`/requests/${created.id}/decline`)
+      .send({ reason: '   ' })
+      .expect(400);
+    await landlord
+      .patch(`/requests/${created.id}/decline`)
+      .send({ reason: 'Unavailable', status: 'DECLINED' })
+      .expect(400);
+    await otherLandlord
+      .patch(`/requests/${created.id}/decline`)
+      .send({ reason: 'Not mine' })
+      .expect(404);
+    const declined = body<{ status: string; declineReason: string }>(
+      await landlord
+        .patch(`/requests/${created.id}/decline`)
+        .send({ reason: '  The room is unavailable for that move-in date.  ' })
+        .expect(200),
+    );
+    expect(declined).toMatchObject({
+      status: AccommodationRequestStatus.DECLINED,
+      declineReason: 'The room is unavailable for that move-in date.',
+    });
+    const tenantHistory = body<
+      Array<{ id: string; declineReason: string | null }>
+    >(await tenant.get('/requests').expect(200));
+    expect(
+      tenantHistory.find(({ id }) => id === created.id)?.declineReason,
+    ).toBe('The room is unavailable for that move-in date.');
+    const landlordHistory = body<
+      Array<{ id: string; declineReason: string | null }>
+    >(await landlord.get('/requests').expect(200));
+    expect(
+      landlordHistory.find(({ id }) => id === created.id)?.declineReason,
+    ).toBe('The room is unavailable for that move-in date.');
+    expect(
+      body<Array<{ id: string }>>(
+        await otherLandlord.get('/requests').expect(200),
+      ),
+    ).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: created.id })]),
+    );
+  });
+
+  it('applies the same decline contract and ownership boundary to an ADMIN owner', async () => {
+    const tenant = await agent('tenant-b');
+    const admin = await agent('admin');
+    const created = body<{ id: string }>(
+      await tenant
+        .post(`/properties/${adminActiveId}/requests`)
+        .send({ preferredMoveInDate: '2026-11-20' })
+        .expect(201),
+    );
+    await admin.patch(`/requests/${created.id}/decline`).expect(400);
+    await admin
+      .patch(`/requests/${created.id}/decline`)
+      .send({ reason: 'The property is unavailable.' })
+      .expect(200);
+    const stored = await prisma.accommodationRequest.findUniqueOrThrow({
+      where: { id: created.id },
+    });
+    expect(stored.declineReason).toBe('The property is unavailable.');
   });
 
   it('allows only the owning tenant to cancel PENDING and resolves a decision race', async () => {

@@ -1,4 +1,9 @@
-import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { AccommodationRequestStatus } from '@prisma/client';
 import { AccommodationRequestsService } from './accommodation-requests.service';
 
@@ -107,7 +112,14 @@ describe('AccommodationRequestsService', () => {
       updateMany.mockResolvedValue({ count: 1 });
       findFirst.mockResolvedValue(landlordRequest(target));
       await expect(
-        service.decide('landlord-1', 'request-1', target),
+        service.decide(
+          'landlord-1',
+          'request-1',
+          target,
+          target === AccommodationRequestStatus.DECLINED
+            ? 'Room unavailable'
+            : undefined,
+        ),
       ).resolves.toMatchObject({ status: target });
       expect(updateMany).toHaveBeenCalledWith({
         where: {
@@ -116,7 +128,13 @@ describe('AccommodationRequestsService', () => {
           property: { landlordId: 'landlord-1' },
           status: AccommodationRequestStatus.PENDING,
         },
-        data: { status: target },
+        data: {
+          status: target,
+          declineReason:
+            target === AccommodationRequestStatus.DECLINED
+              ? 'Room unavailable'
+              : null,
+        },
       });
       if (target === AccommodationRequestStatus.ACCEPTED) {
         expect(email.sendAccommodationRequestAccepted).toHaveBeenCalledWith(
@@ -125,10 +143,23 @@ describe('AccommodationRequestsService', () => {
       } else {
         expect(email.sendAccommodationRequestDeclined).toHaveBeenCalledWith(
           'tenant@example.com',
+          'Room unavailable',
         );
       }
     },
   );
+
+  it('rejects a declined transition without a non-whitespace reason', async () => {
+    await expect(
+      service.decide(
+        'landlord-1',
+        'request-1',
+        AccommodationRequestStatus.DECLINED,
+        '   ',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
 
   it('atomically cancels only a tenant-owned PENDING request', async () => {
     updateMany.mockResolvedValue({ count: 1 });
@@ -145,7 +176,10 @@ describe('AccommodationRequestsService', () => {
         tenantId: 'tenant-1',
         status: AccommodationRequestStatus.PENDING,
       },
-      data: { status: AccommodationRequestStatus.CANCELLED },
+      data: {
+        status: AccommodationRequestStatus.CANCELLED,
+        declineReason: null,
+      },
     });
   });
 
@@ -208,6 +242,10 @@ function landlordRequest(status: AccommodationRequestStatus) {
   return {
     id: 'request-1',
     status,
+    declineReason:
+      status === AccommodationRequestStatus.DECLINED
+        ? 'Room unavailable'
+        : null,
     tenant: {
       email: 'tenant@example.com',
       firstName: 'Lerato',

@@ -1,20 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiRequest, UserProfile, VerificationSubmission } from "@/lib/api";
 import { TenantStatus, TenantWorkspace } from "@/components/tenant-shell";
 import { VerificationDocumentPreview } from "@/components/verification-document-preview";
-import { LandlordWorkspace } from "@/components/landlord-shell";
+import { LandlordStatus, LandlordWorkspace } from "@/components/landlord-shell";
 
 const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
 const maxBytes = 10 * 1024 * 1024;
+
+type SelectedVerificationFile = {
+  file: File;
+  previewUrl?: string;
+};
 
 export function VerificationClient() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [verification, setVerification] =
     useState<VerificationSubmission | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedVerificationFile[]>([]);
+  const previewUrls = useRef(new Set<string>());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -32,47 +38,72 @@ export function VerificationClient() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const urls = previewUrls.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
+
+  function revokePreviewUrls() {
+    previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrls.current.clear();
+  }
+
+  function clearSelectedFiles() {
+    revokePreviewUrls();
+    setSelectedFiles([]);
+  }
+
   function selectFiles(selected: FileList | null) {
     const next = Array.from(selected ?? []);
     const maximum = profile?.role === "LANDLORD" ? 1 : 3;
     if (next.length === 0 || next.length > maximum) {
-      setFiles([]);
+      clearSelectedFiles();
       setError(
         `Select ${maximum === 1 ? "exactly one" : "one to three"} document${maximum === 1 ? "" : "s"}.`,
       );
       return;
     }
     if (next.some((file) => !allowedTypes.includes(file.type))) {
-      setFiles([]);
+      clearSelectedFiles();
       setError("Documents must be PDF, JPEG, or PNG files.");
       return;
     }
     if (next.some((file) => file.size > maxBytes)) {
-      setFiles([]);
+      clearSelectedFiles();
       setError("Each document must be 10 MB or smaller.");
       return;
     }
+    revokePreviewUrls();
+    const nextSelectedFiles = next.map((file) => {
+      if (!file.type.startsWith("image/")) return { file };
+      const previewUrl = URL.createObjectURL(file);
+      previewUrls.current.add(previewUrl);
+      return { file, previewUrl };
+    });
     setError("");
-    setFiles(next);
+    setSelectedFiles(nextSelectedFiles);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (files.length === 0) {
+    if (selectedFiles.length === 0) {
       setError("Select the required verification document(s).");
       return;
     }
     setSubmitting(true);
     setError("");
     const body = new FormData();
-    files.forEach((file) => body.append("documents", file));
+    selectedFiles.forEach(({ file }) => body.append("documents", file));
     try {
       const submitted = await apiRequest<VerificationSubmission>(
         "/verifications",
         { method: "POST", body },
       );
       setVerification(submitted);
-      setFiles([]);
+      clearSelectedFiles();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Submission failed.");
     } finally {
@@ -102,8 +133,8 @@ export function VerificationClient() {
   const landlord = profile.role === "LANDLORD";
 
   const card = (
-    <section className={landlord ? "account-card profile-card verification-card" : "tenant-account-page tenant-verification-page"}>
-      <div className={landlord ? undefined : "tenant-page-heading"}>
+    <section className={landlord ? "landlord-account-page landlord-verification-page verification-card" : "tenant-account-page tenant-verification-page"}>
+      <div className={landlord ? "landlord-page-heading" : "tenant-page-heading"}>
         <p className="eyebrow">Private document verification</p>
         <h1>
           {landlord
@@ -117,8 +148,8 @@ export function VerificationClient() {
         </p>
       </div>
 
-      <div className={landlord ? `verification-status status-${verification.status.toLowerCase()}` : "tenant-verification-status"}>
-        {landlord ? <strong>{statusLabel(verification.status)}</strong> : <TenantStatus status={verification.status} />}
+      <div className={landlord ? "landlord-verification-status" : "tenant-verification-status"}>
+        {landlord ? <LandlordStatus status={verification.status} /> : <TenantStatus status={verification.status} />}
         {verification.createdAt && (
           <span>
             Submitted {new Date(verification.createdAt).toLocaleDateString()}
@@ -157,8 +188,8 @@ export function VerificationClient() {
             />
             <small>PDF, JPEG, or PNG. Maximum 10 MB per file.</small>
           </label>
-          {files.length > 0 && (
-            <SelectedFiles files={files} />
+          {selectedFiles.length > 0 && (
+            <SelectedFiles files={selectedFiles} />
           )}
           {error && (
             <p className="form-error" role="alert">
@@ -185,21 +216,7 @@ export function VerificationClient() {
   return landlord ? <div className="account-overview-shell"><LandlordWorkspace role="LANDLORD">{card}</LandlordWorkspace></div> : <div className="account-overview-shell"><TenantWorkspace>{card}</TenantWorkspace></div>;
 }
 
-function SelectedFiles({ files }: { files: File[] }) {
-  const [previews, setPreviews] = useState<{ name: string; type: string; url?: string }[]>([]);
-  useEffect(() => {
-    const next = files.map((file) => ({ name: file.name, type: file.type, url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined }));
-    setPreviews(next);
-    return () => next.forEach((preview) => { if (preview.url) URL.revokeObjectURL(preview.url); });
-  }, [files]);
-  return <div className="tenant-selected-files" aria-live="polite">{previews.map((preview) => <article key={preview.name}>{preview.url ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={preview.url} alt={`Selected verification evidence: ${preview.name}`} /></> : <span>PDF</span>}<div><strong>{preview.name}</strong><small>{preview.type}</small></div></article>)}</div>;
+function SelectedFiles({ files }: { files: SelectedVerificationFile[] }) {
+  return <div className="tenant-selected-files" aria-live="polite">{files.map(({ file, previewUrl }) => <article key={file.name}>{previewUrl ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={previewUrl} alt={`Selected verification evidence: ${file.name}`} /></> : <span>PDF</span>}<div><strong>{file.name}</strong><small>{file.type}</small></div></article>)}</div>;
 }
 
-function statusLabel(status: VerificationSubmission["status"]): string {
-  return {
-    NOT_SUBMITTED: "Not submitted",
-    PENDING: "Pending review",
-    APPROVED: "Approved",
-    REJECTED: "Changes required",
-  }[status];
-}

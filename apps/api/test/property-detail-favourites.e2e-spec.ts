@@ -106,7 +106,9 @@ describe('Public property detail and tenant favourites (e2e)', () => {
       where: { tenantId: { in: [tenantAId, tenantBId] } },
     });
     await prisma.property.deleteMany({
-      where: { landlord: { email: email('landlord') } },
+      where: {
+        landlord: { email: { startsWith: `favourite-${runId}-` } },
+      },
     });
     await prisma.verification.deleteMany({
       where: { user: { email: email('landlord') } },
@@ -274,20 +276,58 @@ describe('Public property detail and tenant favourites (e2e)', () => {
       /email|passwordHash|objectKey|fullAddress|latitude|longitude|rejectionReason|documents/,
     );
 
+    await request(app.getHttpServer())
+      .patch(`/inquiries/${created.id}/status`)
+      .send({ status: 'RESPONDED' })
+      .expect(401);
     await tenantA
       .patch(`/inquiries/${created.id}/status`)
       .send({ status: 'RESPONDED' })
-      .expect(404);
-    await (
-      await authenticatedAgent('admin')
-    )
+      .expect(403);
+    const adminUser = await prisma.user.upsert({
+      where: { email: email('admin') },
+      update: { role: UserRole.ADMIN },
+      create: userData(
+        'admin',
+        UserRole.ADMIN,
+        await argon2.hash(password),
+      ),
+    });
+    const admin = await authenticatedAgent('admin');
+    await admin
       .patch(`/inquiries/${created.id}/status`)
       .send({ status: 'RESPONDED' })
-      .expect(403);
+      .expect(404);
     await landlordB
       .patch(`/inquiries/${created.id}/status`)
       .send({ status: 'RESPONDED' })
       .expect(404);
+
+    const adminProperty = await prisma.property.create({
+      data: propertyData(
+        adminUser.id,
+        PropertyStatus.ACTIVE,
+        'Admin-owned inquiry property',
+      ),
+    });
+    const adminInquiry = await prisma.inquiry.create({
+      data: {
+        propertyId: adminProperty.id,
+        tenantId: tenantAId,
+        landlordId: adminUser.id,
+        message: 'Can I view this admin-owned property?',
+      },
+    });
+    const adminResponded = getBody<{ status: string }>(
+      await admin
+        .patch(`/inquiries/${adminInquiry.id}/status`)
+        .send({ status: 'RESPONDED' })
+        .expect(200),
+    );
+    expect(adminResponded.status).toBe('RESPONDED');
+    expect(JSON.stringify(adminResponded)).not.toMatch(
+      /email|passwordHash|objectKey|fullAddress|latitude|longitude|rejectionReason|documents/,
+    );
     await landlord
       .patch(`/inquiries/${created.id}/status`)
       .send({ status: 'OPEN' })

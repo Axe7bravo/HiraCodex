@@ -7,8 +7,8 @@ import {
   type AccommodationRequest,
   type UserProfile,
 } from "@/lib/api";
-import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
-import { LandlordShell } from "@/components/landlord-shell";
+import { TenantShell, TenantStatus } from "@/components/tenant-shell";
+import { LandlordShell, LandlordStatus } from "@/components/landlord-shell";
 
 export function RequestList() {
   const [role, setRole] = useState<"TENANT" | "LANDLORD" | "ADMIN" | null>(null);
@@ -18,6 +18,7 @@ export function RequestList() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activeTab, setActiveTab] = useState<"current" | "history">("current");
 
   useEffect(() => {
     Promise.all([
@@ -36,6 +37,7 @@ export function RequestList() {
   async function transition(
     request: AccommodationRequest,
     action: "accept" | "decline" | "cancel",
+    reason?: string,
   ) {
     setUpdatingId(request.id);
     setMutationError("");
@@ -43,7 +45,12 @@ export function RequestList() {
     try {
       const updated = await apiRequest<AccommodationRequest>(
         `/requests/${request.id}/${action}`,
-        { method: "PATCH" },
+        {
+          method: "PATCH",
+          ...(action === "decline"
+            ? { body: JSON.stringify({ reason: reason?.trim() }) }
+            : {}),
+        },
       );
       setItems((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
@@ -56,9 +63,27 @@ export function RequestList() {
     }
   }
 
+  const landlordContext = isLandlordContext(role);
+  const currentRequests = items
+    .filter(({ status }) => status === "PENDING" || status === "ACCEPTED")
+    .sort((first, second) => {
+      if (landlordContext && first.status !== second.status) {
+        return first.status === "PENDING" ? -1 : 1;
+      }
+      return newestFirst(first.createdAt, second.createdAt);
+    });
+  const historyRequests = items
+    .filter(({ status }) => status === "DECLINED" || status === "CANCELLED")
+    .sort((first, second) => newestFirst(first.updatedAt, second.updatedAt));
+  const visibleRequests = activeTab === "current" ? currentRequests : historyRequests;
+  function selectTab(tab: "current" | "history", focus = false) {
+    setActiveTab(tab);
+    if (focus) document.getElementById(`request-tab-${tab}`)?.focus();
+  }
+
   const content = (
-    <section className={role === "TENANT" ? "tenant-account-page" : "discovery-shell inquiry-list"}>
-      <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
+    <section className={role === "TENANT" ? "tenant-account-page" : isLandlordContext(role) ? "landlord-account-page landlord-records-page inquiry-list" : "discovery-shell inquiry-list"}>
+      <header className={role === "TENANT" ? "tenant-page-heading" : isLandlordContext(role) ? "landlord-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
         <h1>
           {isLandlordContext(role) ? "Accommodation requests" : "Your requests"}
@@ -75,12 +100,23 @@ export function RequestList() {
           {error}
         </p>
       )}
-      {!loading && !error && items.length === 0 && (
-        role === "TENANT" ? <TenantEmpty title="No accommodation requests yet" copy="You haven't requested accommodation yet." /> : <div className="discovery-state discovery-empty"><h2>No requests yet</h2></div>
+      {!loading && !error && (
+        <div className="request-tabs" role="tablist" aria-label="Accommodation request views" onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            selectTab(activeTab === "current" ? "history" : "current", true);
+          }
+        }}>
+          <button id="request-tab-current" role="tab" type="button" aria-selected={activeTab === "current"} aria-controls="request-panel-current" tabIndex={activeTab === "current" ? 0 : -1} onClick={() => selectTab("current")}>Current <span>{currentRequests.length}</span></button>
+          <button id="request-tab-history" role="tab" type="button" aria-selected={activeTab === "history"} aria-controls="request-panel-history" tabIndex={activeTab === "history" ? 0 : -1} onClick={() => selectTab("history")}>History <span>{historyRequests.length}</span></button>
+        </div>
       )}
-      {items.length > 0 && (
-        <div className="inquiry-cards">
-          {items.map((request) => (
+      {!loading && !error && (
+        <div id={`request-panel-${activeTab}`} role="tabpanel" aria-labelledby={`request-tab-${activeTab}`} className="request-tab-panel">
+          {visibleRequests.length === 0 ? (
+            <RequestEmpty tab={activeTab} role={role} />
+          ) : <div className="inquiry-cards">
+          {visibleRequests.map((request) => (
             <RequestCard
               key={request.id}
               request={request}
@@ -89,6 +125,7 @@ export function RequestList() {
               transition={transition}
             />
           ))}
+          </div>}
         </div>
       )}
       {success && (
@@ -118,12 +155,18 @@ function RequestCard({
   transition: (
     request: AccommodationRequest,
     action: "accept" | "decline" | "cancel",
+    reason?: string,
   ) => Promise<void>;
 }) {
+  const [showDecline, setShowDecline] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
   return (
-    <article className={role === "TENANT" ? "inquiry-card tenant-record-card" : "inquiry-card"}>
+    <article className={`${role === "TENANT" ? "inquiry-card tenant-record-card" : isLandlordContext(role) ? "inquiry-card landlord-record-card" : "inquiry-card"}${isLandlordContext(role) && request.status === "PENDING" ? " request-card-attention" : ""}`}>
       <div>
-        {role === "TENANT" ? <TenantStatus status={request.status} /> : <span className="status-badge">{request.status}</span>}
+        {role === "TENANT" ? <TenantStatus status={request.status} /> : isLandlordContext(role) ? <LandlordStatus status={request.status} /> : <span className="status-badge">{request.status}</span>}
+        {isLandlordContext(role) && request.status === "PENDING" && (
+          <span className="request-needs-response">Needs response</span>
+        )}
         <h2>
           <Link href={`/properties/${request.property.id}`}>
             {request.property.title}
@@ -138,7 +181,14 @@ function RequestCard({
         Preferred move-in:{" "}
         {new Date(request.preferredMoveInDate).toLocaleDateString("en-LS")}
       </p>
+      <p className="request-state-copy">{requestStateCopy(request.status, role)}</p>
       {request.note && <p>{request.note}</p>}
+      {request.status === "DECLINED" && request.declineReason && (
+        <div className="request-decline-reason">
+          <strong>Reason from landlord</strong>
+          <p>“{request.declineReason}”</p>
+        </div>
+      )}
       {isLandlordContext(role) && request.tenant && (
         <div className="inquiry-contact">
           <strong>
@@ -180,21 +230,66 @@ function RequestCard({
                 {updating ? "Updating…" : "Accept"}
               </button>
               <button
-                className="button button-outline"
+                className="button button-danger"
                 disabled={updating}
-                onClick={() => transition(request, "decline")}
+                onClick={() => setShowDecline(true)}
               >
-                {updating ? "Updating…" : "Decline"}
+                Decline request
               </button>
             </>
           ) : null}
         </div>
+      )}
+      {isLandlordContext(role) && request.status === "PENDING" && showDecline && (
+        <form
+          className="request-decline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void transition(request, "decline", declineReason);
+          }}
+        >
+          <label htmlFor={`decline-reason-${request.id}`}>Reason for declining</label>
+          <textarea
+            id={`decline-reason-${request.id}`}
+            value={declineReason}
+            maxLength={500}
+            onChange={(event) => setDeclineReason(event.target.value)}
+            disabled={updating}
+            required
+          />
+          <small>The tenant will be able to see this reason.</small>
+          <div className="inquiry-status-actions">
+            <button className="button button-outline" type="button" disabled={updating} onClick={() => { setShowDecline(false); setDeclineReason(""); }}>Cancel</button>
+            <button className="button button-danger" type="submit" disabled={updating || !declineReason.trim()}>{updating ? "Declining…" : "Decline request"}</button>
+          </div>
+        </form>
       )}
       <small>
         Submitted {new Date(request.createdAt).toLocaleDateString("en-LS")}
       </small>
     </article>
   );
+}
+
+function RequestEmpty({ tab, role }: { tab: "current" | "history"; role: "TENANT" | "LANDLORD" | "ADMIN" | null }) {
+  if (tab === "history") {
+    return <div className="request-tab-empty"><h2>No previous requests yet.</h2></div>;
+  }
+  if (role === "TENANT") {
+    return <div className="request-tab-empty"><h2>No active accommodation requests.</h2><p>Browse properties when you&apos;re ready to find your next place.</p><Link className="button button-small" href="/properties">Browse properties</Link></div>;
+  }
+  return <div className="request-tab-empty"><h2>No active accommodation requests.</h2><p>New tenant requests will appear here.</p></div>;
+}
+
+function requestStateCopy(status: AccommodationRequest["status"], role: "TENANT" | "LANDLORD" | "ADMIN" | null): string {
+  if (status === "PENDING") return role === "TENANT" ? "Waiting for landlord response." : "Choose whether to accept or decline this request.";
+  if (status === "ACCEPTED") return "Accommodation opportunity accepted.";
+  if (status === "DECLINED") return "This request was declined by the landlord.";
+  return "This request was cancelled.";
+}
+
+function newestFirst(first: string, second: string): number {
+  return new Date(second).getTime() - new Date(first).getTime();
 }
 
 function isLandlordContext(role: "TENANT" | "LANDLORD" | "ADMIN" | null): role is "LANDLORD" | "ADMIN" {

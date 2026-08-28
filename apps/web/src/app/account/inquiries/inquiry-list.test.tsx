@@ -2,11 +2,20 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { InquiryList } from "./inquiry-list";
 
+const replace = jest.fn();
+const refresh = jest.fn();
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/account/inquiries",
+  useRouter: () => ({ replace, refresh }),
+}));
+
 describe("InquiryList", () => {
   const fetchMock = jest.fn();
   const originalFetch = global.fetch;
   beforeEach(() => {
     fetchMock.mockReset();
+    replace.mockReset();
+    refresh.mockReset();
     Object.defineProperty(global, "fetch", {
       configurable: true,
       writable: true,

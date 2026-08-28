@@ -6,6 +6,7 @@ const replace = jest.fn();
 const refresh = jest.fn();
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ replace, refresh }),
+  usePathname: () => "/account",
 }));
 
 describe("AccountClient", () => {
@@ -24,6 +25,10 @@ describe("AccountClient", () => {
   it("loads and saves a tenant profile with tenant-only fields", async () => {
     fetchMock
       .mockResolvedValueOnce(response(tenantProfile))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({}))
       .mockResolvedValueOnce(
         response({
           ...tenantProfile,
@@ -57,7 +62,7 @@ describe("AccountClient", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Profile saved successfully",
     );
-    const [url, options] = fetchMock.mock.calls[1];
+    const [url, options] = fetchMock.mock.calls[5];
     expect(url).toBe("http://localhost:4000/users/me");
     expect(options.method).toBe("PATCH");
     expect(JSON.parse(options.body)).toMatchObject({
@@ -72,6 +77,9 @@ describe("AccountClient", () => {
   it("shows and saves landlord-only profile fields", async () => {
     fetchMock
       .mockResolvedValueOnce(response(landlordProfile))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(
         response({
           ...landlordProfile,
@@ -92,8 +100,8 @@ describe("AccountClient", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(JSON.parse(fetchMock.mock.calls[4][1].body)).toMatchObject({
       organisation: "Hira Homes",
       propertyCount: 5,
     });

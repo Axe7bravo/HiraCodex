@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, PropertyStatus, UserRole } from '@prisma/client';
+import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PropertiesService } from './properties.service';
 
 describe('PropertiesService', () => {
@@ -26,12 +27,26 @@ describe('PropertiesService', () => {
     delete: jest.fn(),
     deleteMany: jest.fn(),
   };
+  const verification = {
+    findFirst: jest.fn(),
+  };
+  type TestTransactionClient = {
+    property: typeof property;
+    propertyPhoto: typeof propertyPhoto;
+    verification: typeof verification;
+  };
+  const transactionClient: TestTransactionClient = {
+    property,
+    propertyPhoto,
+    verification,
+  };
   const prisma = {
     property,
     propertyPhoto,
-    verification: { findFirst: jest.fn() },
-    $transaction: jest.fn((callback: (client: unknown) => unknown) =>
-      callback({ property, propertyPhoto, verification: prisma.verification }),
+    verification,
+    $transaction: jest.fn(
+      (callback: (client: TestTransactionClient) => unknown) =>
+        callback(transactionClient),
     ),
   };
   const storage = { put: jest.fn(), get: jest.fn(), delete: jest.fn() };
@@ -42,7 +57,7 @@ describe('PropertiesService', () => {
     storage.put.mockResolvedValue(undefined);
     storage.delete.mockResolvedValue(undefined);
     propertyPhoto.findMany.mockResolvedValue([]);
-    prisma.verification.findFirst.mockResolvedValue({ id: 'verification-1' });
+    verification.findFirst.mockResolvedValue({ id: 'verification-1' });
   });
 
   it('lists only the authenticated landlord properties', async () => {
@@ -102,6 +117,70 @@ describe('PropertiesService', () => {
       },
       data: { status: PropertyStatus.PAUSED },
     });
+  });
+
+  it('conditionally pauses an owned ACTIVE property', async () => {
+    property.findFirst.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.ACTIVE,
+    });
+    property.updateMany.mockResolvedValue({ count: 1 });
+    property.findUniqueOrThrow.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.PAUSED,
+    });
+
+    const transformedInput = Object.assign(new UpdatePropertyDto(), {
+      title: undefined,
+      description: undefined,
+      monthlyPrice: undefined,
+      amenities: undefined,
+      status: PropertyStatus.PAUSED,
+    });
+
+    await expect(
+      service.update('property-1', 'landlord-1', transformedInput),
+    ).resolves.toMatchObject({ status: PropertyStatus.PAUSED });
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'property-1',
+        landlordId: 'landlord-1',
+        status: { in: [PropertyStatus.ACTIVE] },
+      },
+      data: { status: PropertyStatus.PAUSED },
+    });
+  });
+
+  it('does not allow property fields to be changed while pausing ACTIVE', async () => {
+    property.findFirst.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.ACTIVE,
+    });
+
+    await expect(
+      service.update('property-1', 'landlord-1', {
+        status: PropertyStatus.PAUSED,
+        title: 'Stale active edit',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(property.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not pause when ACTIVE status is lost before the mutation', async () => {
+    property.findFirst
+      .mockResolvedValueOnce({
+        id: 'property-1',
+        status: PropertyStatus.ACTIVE,
+      })
+      .mockResolvedValueOnce({ status: PropertyStatus.INACTIVE });
+    property.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.update('property-1', 'landlord-1', {
+        status: PropertyStatus.PAUSED,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(property.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 
   it('updates rejected property content without changing its status', async () => {
@@ -403,10 +482,24 @@ describe('PropertiesService', () => {
 
     await service.submitReview('property-1', 'admin-1', UserRole.ADMIN);
 
-    expect(prisma.verification.findFirst).not.toHaveBeenCalled();
-    expect(property.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ landlordId: 'admin-1' }) }),
-    );
+    expect(verification.findFirst).not.toHaveBeenCalled();
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'property-1',
+        landlordId: 'admin-1',
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
+      },
+      data: {
+        status: PropertyStatus.PENDING_REVIEW,
+        rejectionReason: null,
+      },
+    });
   });
 
   it('requires an approved verification for a normal LANDLORD submission', async () => {
@@ -414,7 +507,7 @@ describe('PropertiesService', () => {
       status: PropertyStatus.DRAFT,
       _count: { photos: 3 },
     });
-    prisma.verification.findFirst.mockResolvedValueOnce(null);
+    verification.findFirst.mockResolvedValueOnce(null);
 
     await expect(
       service.submitReview('property-1', 'landlord-1', UserRole.LANDLORD),

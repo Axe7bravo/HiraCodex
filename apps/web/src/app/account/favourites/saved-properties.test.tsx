@@ -35,7 +35,7 @@ describe("SavedProperties", () => {
       await screen.findByRole("heading", { name: "No saved properties yet" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Browse approved homes" }),
+      screen.getByRole("link", { name: "Browse properties" }),
     ).toHaveAttribute("href", "/properties");
   });
 });

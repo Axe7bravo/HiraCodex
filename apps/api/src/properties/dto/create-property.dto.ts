@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -10,6 +11,12 @@ import {
   MinLength,
 } from 'class-validator';
 import { trimString, trimStringArray } from './property-dto.transforms';
+import {
+  PROPERTY_AMENITIES,
+  PROPERTY_AREAS,
+  PROPERTY_INSTITUTIONS,
+  PROPERTY_ROOM_TYPES,
+} from '../property-options';
 
 const MONEY_PATTERN = /^(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,6 +45,7 @@ export class CreatePropertyDto {
 
   @Transform(trimString)
   @IsString()
+  @IsIn([...PROPERTY_ROOM_TYPES])
   @MinLength(2)
   @MaxLength(80)
   roomType!: string;
@@ -52,18 +60,21 @@ export class CreatePropertyDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(30)
   @IsString({ each: true })
+  @IsIn([...PROPERTY_AMENITIES], { each: true })
   @MinLength(1, { each: true })
   @MaxLength(80, { each: true })
   amenities!: string[];
 
   @Transform(trimString)
   @IsString()
+  @IsIn([...PROPERTY_AREAS])
   @MinLength(2)
   @MaxLength(120)
   area!: string;
 
   @Transform(trimString)
   @IsString()
+  @IsIn([...PROPERTY_INSTITUTIONS])
   @MinLength(2)
   @MaxLength(160)
   nearestInstitution!: string;

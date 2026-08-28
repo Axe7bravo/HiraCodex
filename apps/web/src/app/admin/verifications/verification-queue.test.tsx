@@ -30,7 +30,7 @@ describe("AdminVerificationQueue", () => {
       target: { value: "LANDLORD" },
     });
     expect(
-      await screen.findByText("No pending verifications."),
+      await screen.findByText("Verification queues are clear."),
     ).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toContain("?type=LANDLORD");
   });

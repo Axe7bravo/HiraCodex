@@ -127,7 +127,11 @@ describe('VerificationsService', () => {
     prisma.verificationDocument.findFirst.mockResolvedValueOnce(null);
 
     await expect(
-      service.getMineDocument('landlord-1', UserRole.LANDLORD, 'other-document'),
+      service.getMineDocument(
+        'landlord-1',
+        UserRole.LANDLORD,
+        'other-document',
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(storage.get).not.toHaveBeenCalled();
   });

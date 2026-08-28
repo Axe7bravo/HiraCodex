@@ -237,6 +237,7 @@ export type AccommodationRequest = {
   propertyId: string;
   preferredMoveInDate: string;
   note: string | null;
+  declineReason: string | null;
   status: "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED";
   createdAt: string;
   updatedAt: string;

@@ -79,11 +79,11 @@ export class EmailService {
     );
   }
 
-  sendAccommodationRequestDeclined(to: string): Promise<void> {
+  sendAccommodationRequestDeclined(to: string, reason: string): Promise<void> {
     return this.send(
       to,
       'Update on your Hira accommodation request',
-      'A landlord declined your accommodation request. Sign in to Hira to review its status.',
+      `A landlord declined your accommodation request. Reason: ${reason}\n\nSign in to Hira to review its status.`,
     );
   }
 

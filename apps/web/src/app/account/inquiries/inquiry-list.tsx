@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest, type Inquiry, type UserProfile } from "@/lib/api";
 import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
-import { LandlordShell } from "@/components/landlord-shell";
+import { LandlordShell, LandlordStatus } from "@/components/landlord-shell";
 
 export function InquiryList() {
   const [role, setRole] = useState<"TENANT" | "LANDLORD" | "ADMIN" | null>(null);
@@ -57,8 +57,8 @@ export function InquiryList() {
   }
 
   const content = (
-    <section className={role === "TENANT" ? "tenant-account-page" : "discovery-shell inquiry-list"}>
-      <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
+    <section className={role === "TENANT" ? "tenant-account-page" : isLandlordContext(role) ? "landlord-account-page landlord-records-page inquiry-list" : "discovery-shell inquiry-list"}>
+      <header className={role === "TENANT" ? "tenant-page-heading" : isLandlordContext(role) ? "landlord-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
         <h1>{isLandlordContext(role) ? "Property inquiries" : "Your inquiries"}</h1>
         <p>
@@ -79,9 +79,9 @@ export function InquiryList() {
       {items.length > 0 && (
         <div className="inquiry-cards">
           {items.map((inquiry) => (
-            <article key={inquiry.id} className={role === "TENANT" ? "inquiry-card tenant-record-card" : "inquiry-card"}>
+            <article key={inquiry.id} className={role === "TENANT" ? "inquiry-card tenant-record-card" : isLandlordContext(role) ? "inquiry-card landlord-record-card" : "inquiry-card"}>
               <div>
-                {role === "TENANT" ? <TenantStatus status={inquiry.status} /> : <span className="status-badge">{inquiry.status}</span>}
+                {role === "TENANT" ? <TenantStatus status={inquiry.status} /> : isLandlordContext(role) ? <LandlordStatus status={inquiry.status} /> : <span className="status-badge">{inquiry.status}</span>}
                 <h2>
                   <Link href={`/properties/${inquiry.property.id}`}>
                     {inquiry.property.title}

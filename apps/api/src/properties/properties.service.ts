@@ -91,10 +91,27 @@ export class PropertiesService {
   }
 
   async update(id: string, landlordId: string, input: UpdatePropertyDto) {
-    if (Object.keys(input).length === 0) {
+    const suppliedFields = Object.entries(input).filter(
+      ([, value]) => value !== undefined,
+    );
+    if (suppliedFields.length === 0) {
       throw new BadRequestException('At least one property field is required');
     }
-    const property = await this.requireManageableProperty(id, landlordId);
+    const property = await this.prisma.property.findFirst({
+      where: { id, landlordId },
+      select: { id: true, status: true },
+    });
+    if (!property) throw new NotFoundException('Property not found');
+    const isActivePause =
+      property.status === PropertyStatus.ACTIVE &&
+      input.status === PropertyStatus.PAUSED &&
+      suppliedFields.length === 1 &&
+      suppliedFields[0]?.[0] === 'status';
+    if (!manageableStatuses.includes(property.status) && !isActivePause) {
+      throw new ConflictException(
+        'Only draft, paused, or rejected properties can be managed',
+      );
+    }
     if (
       property.status === PropertyStatus.REJECTED &&
       input.status !== undefined
@@ -103,8 +120,9 @@ export class PropertiesService {
         'Rejected properties remain rejected until they are resubmitted',
       );
     }
-    const mutationStatuses =
-      input.status === undefined
+    const mutationStatuses = isActivePause
+      ? [PropertyStatus.ACTIVE]
+      : input.status === undefined
         ? manageableStatuses
         : landlordStatusChangeSourceStatuses;
     const updated = await this.prisma.property.updateMany({
@@ -320,14 +338,16 @@ export class PropertiesService {
           );
         }
         if (role !== UserRole.ADMIN) {
-          const approvedVerification = await transaction.verification.findFirst({
-            where: {
-              userId: landlordId,
-              type: VerificationType.LANDLORD,
-              status: VerificationStatus.APPROVED,
+          const approvedVerification = await transaction.verification.findFirst(
+            {
+              where: {
+                userId: landlordId,
+                type: VerificationType.LANDLORD,
+                status: VerificationStatus.APPROVED,
+              },
+              select: { id: true },
             },
-            select: { id: true },
-          });
+          );
           if (!approvedVerification) {
             throw new ForbiddenException(
               'Approved landlord verification is required before listing submission',

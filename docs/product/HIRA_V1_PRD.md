@@ -323,6 +323,7 @@ Primary V1 tenant: tertiary student seeking safe, affordable accommodation in or
 - Request fields: preferred move-in date, optional note.
 - Lifecycle: PENDING → ACCEPTED / DECLINED / CANCELLED.
 - Only the owning landlord may accept or decline.
+- Declining requires a concise landlord-supplied reason that is stored with the request and visible to the tenant.
 - Tenant may cancel while pending.
 - Acceptance is a marketplace workflow state, not a legally binding lease or payment confirmation.
 
@@ -433,7 +434,7 @@ Build in vertical slices. Each feature should be understandable end to end befor
 | PropertyPhoto | propertyId, object-storage key/url, sortOrder |
 | Favourite | tenantId, propertyId, createdAt; unique pair |
 | Inquiry | propertyId, tenantId, landlordId, moveInDate optional, message, status, timestamps |
-| AccommodationRequest | propertyId, tenantId, landlordId, preferredMoveInDate, note, status, timestamps |
+| AccommodationRequest | propertyId, tenantId, landlordId, preferredMoveInDate, note, status, nullable declineReason, timestamps |
 | AdminAction / AuditLog | actorId, action, targetType, targetId, metadata, createdAt |
 
 ## 9.2 Recommended Status Enums

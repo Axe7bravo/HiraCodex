@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, UserProfile } from "@/lib/api";
 import { TenantDashboard } from "./tenant-dashboard";
 import { AdminDashboard } from "./admin-dashboard";
-import { LandlordWorkspace } from "@/components/landlord-shell";
+import { LandlordDashboard } from "./landlord-dashboard";
 
 type ProfileForm = {
   firstName: string;
@@ -19,7 +19,7 @@ type ProfileForm = {
   propertyCount: string;
 };
 
-export function AccountClient() {
+export function AccountClient({ landlordContext = false }: { landlordContext?: boolean }) {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [form, setForm] = useState<ProfileForm | null>(null);
@@ -111,11 +111,6 @@ export function AccountClient() {
     );
   }
 
-  const verification =
-    "verificationStatus" in profile
-      ? verificationLabel(profile.verificationStatus)
-      : "Not applicable";
-
   if (profile.role === "TENANT") {
     return (
       <TenantDashboard
@@ -137,7 +132,14 @@ export function AccountClient() {
     );
   }
 
+  if (profile.role === "LANDLORD") {
+    return <LandlordDashboard profile={profile} profileEditor={<LandlordProfileEditor profile={profile} form={form} setField={setField} save={save} saving={saving} saveError={saveError} saved={saved} />} />;
+  }
+
   if (profile.role === "ADMIN") {
+    if (landlordContext) {
+      return <LandlordDashboard profile={profile} profileEditor={<AdminProfileEditor profile={profile} form={form} setField={setField} save={save} saving={saving} saveError={saveError} saved={saved} />} />;
+    }
     return (
       <AdminDashboard
         profile={profile}
@@ -156,190 +158,7 @@ export function AccountClient() {
     );
   }
 
-  return (
-    <LandlordWorkspace role="LANDLORD">
-    <section className="account-card profile-card landlord-profile-card">
-      <div className="profile-heading">
-        <div>
-          <p className="eyebrow">Profile settings</p>
-          <h1>Your Hira profile</h1>
-          <p>Keep your account details current and accurate.</p>
-        </div>
-        <button
-          className="button button-outline button-small"
-          type="button"
-          onClick={logout}
-          disabled={signingOut}
-        >
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
-
-      <dl className="profile-summary">
-        <div>
-          <dt>Role</dt>
-          <dd>{roleLabel(profile.role)}</dd>
-        </div>
-        <div>
-          <dt>Account</dt>
-          <dd>{profile.status}</dd>
-        </div>
-        <div>
-          <dt>Verification</dt>
-          <dd>{verification}</dd>
-        </div>
-      </dl>
-
-      {profile.role !== "ADMIN" && (
-        <Link className="button button-outline" href="/account/verification">
-          Manage verification
-        </Link>
-      )}
-
-      {profile.role === "LANDLORD" && (
-        <Link className="button button-outline" href="/account/properties">
-          Manage properties
-        </Link>
-      )}
-
-      {profile.role === "TENANT" && (
-        <div className="property-actions">
-          <Link className="button button-outline" href="/account/favourites">
-            Saved properties
-          </Link>
-          <Link className="button button-outline" href="/account/inquiries">
-            Your inquiries
-          </Link>
-          <Link className="button button-outline" href="/account/requests">
-            Your requests
-          </Link>
-        </div>
-      )}
-
-      {profile.role === "LANDLORD" && (
-        <div className="property-actions">
-          <Link className="button button-outline" href="/account/inquiries">
-            Property inquiries
-          </Link>
-          <Link className="button button-outline" href="/account/requests">
-            Accommodation requests
-          </Link>
-        </div>
-      )}
-
-      {profile.role === "ADMIN" && (
-        <div className="property-actions">
-          <Link className="button button-outline" href="/admin/verifications">
-            Review verifications
-          </Link>
-          <Link className="button button-outline" href="/admin/properties">
-            Review properties
-          </Link>
-        </div>
-      )}
-
-      <form className="auth-form profile-form" onSubmit={save}>
-        <div className="field-row">
-          <ProfileInput
-            label="First name"
-            value={form.firstName}
-            onChange={(value) => setField("firstName", value)}
-            required
-            maxLength={80}
-            autoComplete="given-name"
-          />
-          <ProfileInput
-            label="Last name"
-            value={form.lastName}
-            onChange={(value) => setField("lastName", value)}
-            required
-            maxLength={80}
-            autoComplete="family-name"
-          />
-        </div>
-        <label>
-          Email address
-          <input value={profile.email} type="email" readOnly />
-          <small>Email changes are not available in this version.</small>
-        </label>
-        <ProfileInput
-          label="Phone"
-          value={form.phone}
-          onChange={(value) => setField("phone", value)}
-          maxLength={40}
-          autoComplete="tel"
-        />
-        <ProfileInput
-          label="Contact preference / method"
-          value={form.contactMethod}
-          onChange={(value) => setField("contactMethod", value)}
-          maxLength={80}
-        />
-
-        {profile.role === "TENANT" && (
-          <>
-            <ProfileInput
-              label="Institution"
-              value={form.institution}
-              onChange={(value) => setField("institution", value)}
-              maxLength={160}
-            />
-            <label>
-              Expected move-in date
-              <input
-                type="date"
-                value={form.expectedMoveIn}
-                onChange={(event) =>
-                  setField("expectedMoveIn", event.target.value)
-                }
-              />
-            </label>
-          </>
-        )}
-
-        {profile.role === "LANDLORD" && (
-          <>
-            <ProfileInput
-              label="Organisation"
-              value={form.organisation}
-              onChange={(value) => setField("organisation", value)}
-              maxLength={160}
-            />
-            <label>
-              Declared property count
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.propertyCount}
-                onChange={(event) =>
-                  setField("propertyCount", event.target.value)
-                }
-              />
-              <small>
-                Your declared portfolio size, not a count of Hira listings.
-              </small>
-            </label>
-          </>
-        )}
-
-        {saveError && (
-          <p className="form-error" role="alert">
-            {saveError}
-          </p>
-        )}
-        {saved && (
-          <p className="form-success" role="status">
-            Profile saved successfully.
-          </p>
-        )}
-        <button className="button" type="submit" disabled={saving}>
-          {saving ? "Saving profile…" : "Save profile"}
-        </button>
-      </form>
-    </section>
-    </LandlordWorkspace>
-  );
+  return null;
 }
 
 function TenantProfileEditor({
@@ -379,6 +198,24 @@ function TenantProfileEditor({
       <button className="button" type="submit" disabled={saving}>{saving ? "Saving profile…" : "Save profile"}</button>
     </form>
   );
+}
+
+function LandlordProfileEditor({ profile, form, setField, save, saving, saveError, saved }: {
+  profile: Extract<UserProfile, { role: "LANDLORD" }>;
+  form: ProfileForm;
+  setField: (field: keyof ProfileForm, value: string) => void;
+  save: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  saving: boolean;
+  saveError: string;
+  saved: boolean;
+}) {
+  return <form className="auth-form profile-form" onSubmit={save}>
+    <div className="field-row"><ProfileInput label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required maxLength={80} autoComplete="given-name" /><ProfileInput label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required maxLength={80} autoComplete="family-name" /></div>
+    <label>Email address<input value={profile.email} type="email" readOnly /><small>Email changes are not available in this version.</small></label>
+    <div className="field-row"><ProfileInput label="Phone" value={form.phone} onChange={(value) => setField("phone", value)} maxLength={40} autoComplete="tel" /><ProfileInput label="Contact preference / method" value={form.contactMethod} onChange={(value) => setField("contactMethod", value)} maxLength={80} /></div>
+    <div className="field-row"><ProfileInput label="Organisation" value={form.organisation} onChange={(value) => setField("organisation", value)} maxLength={160} /><label>Declared property count<input type="number" min="0" step="1" value={form.propertyCount} onChange={(event) => setField("propertyCount", event.target.value)} /><small>Your declared portfolio size, not a count of Hira listings.</small></label></div>
+    {saveError && <p className="form-error" role="alert">{saveError}</p>}{saved && <p className="form-success" role="status">Profile saved successfully.</p>}<button className="button" type="submit" disabled={saving}>{saving ? "Saving profile…" : "Save profile"}</button>
+  </form>;
 }
 
 function AdminProfileEditor({ profile, form, setField, save, saving, saveError, saved }: {
@@ -470,19 +307,3 @@ function nullable(value: string): string | null {
   return trimmed || null;
 }
 
-function roleLabel(role: UserProfile["role"]): string {
-  if (role === "TENANT") return "Student / Tenant";
-  if (role === "LANDLORD") return "Landlord";
-  return "Administrator";
-}
-
-function verificationLabel(
-  status: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED",
-): string {
-  return {
-    NOT_SUBMITTED: "Not submitted",
-    PENDING: "Pending review",
-    APPROVED: "Approved",
-    REJECTED: "Rejected",
-  }[status];
-}
