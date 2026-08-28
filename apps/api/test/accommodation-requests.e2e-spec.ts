@@ -206,7 +206,7 @@ describe('Accommodation requests (e2e)', () => {
         .expect(201),
     );
     await tenant.patch(`/requests/${created.id}/accept`).expect(403);
-    await admin.patch(`/requests/${created.id}/decline`).expect(403);
+    await admin.patch(`/requests/${created.id}/decline`).expect(404);
     await landlordB.patch(`/requests/${created.id}/accept`).expect(404);
     const decisions = await Promise.all([
       landlordA.patch(`/requests/${created.id}/accept`),

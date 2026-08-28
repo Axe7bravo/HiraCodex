@@ -38,7 +38,7 @@ describe("RequestList", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("lets a landlord accept a PENDING request with safe tenant context", async () => {
+  it.each(["LANDLORD", "ADMIN"])("lets a %s property owner accept a PENDING request with safe tenant context", async (role) => {
     const pending = {
       ...fixture("PENDING"),
       tenant: {
@@ -51,8 +51,9 @@ describe("RequestList", () => {
       },
     };
     fetchMock
-      .mockResolvedValueOnce(response({ role: "LANDLORD" }))
+      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response([pending]))
+      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response({ ...pending, status: "ACCEPTED" }));
     render(<RequestList />);
     expect(await screen.findByText("Verified student")).toBeInTheDocument();

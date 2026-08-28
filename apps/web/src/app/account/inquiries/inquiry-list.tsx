@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest, type Inquiry, type UserProfile } from "@/lib/api";
 import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
+import { LandlordShell } from "@/components/landlord-shell";
 
 export function InquiryList() {
-  const [role, setRole] = useState<"TENANT" | "LANDLORD" | null>(null);
+  const [role, setRole] = useState<"TENANT" | "LANDLORD" | "ADMIN" | null>(null);
   const [items, setItems] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -20,7 +21,7 @@ export function InquiryList() {
       apiRequest<Inquiry[]>("/inquiries"),
     ])
       .then(([user, inquiries]) => {
-        if (user.role === "TENANT" || user.role === "LANDLORD")
+        if (user.role === "TENANT" || user.role === "LANDLORD" || user.role === "ADMIN")
           setRole(user.role);
         setItems(inquiries);
       })
@@ -59,9 +60,9 @@ export function InquiryList() {
     <section className={role === "TENANT" ? "tenant-account-page" : "discovery-shell inquiry-list"}>
       <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
-        <h1>{role === "LANDLORD" ? "Property inquiries" : "Your inquiries"}</h1>
+        <h1>{isLandlordContext(role) ? "Property inquiries" : "Your inquiries"}</h1>
         <p>
-          {role === "LANDLORD"
+          {isLandlordContext(role)
             ? "Questions received for properties you manage."
             : "Questions you have sent to landlords."}
         </p>
@@ -98,7 +99,7 @@ export function InquiryList() {
                   {new Date(inquiry.moveInDate).toLocaleDateString("en-LS")}
                 </p>
               )}
-              {role === "LANDLORD" && inquiry.tenant && (
+              {isLandlordContext(role) && inquiry.tenant && (
                 <div className="inquiry-contact">
                   <strong>
                     {inquiry.tenant.firstName} {inquiry.tenant.lastName}
@@ -119,7 +120,7 @@ export function InquiryList() {
                   )}
                 </div>
               )}
-              {role === "LANDLORD" && inquiry.status !== "CLOSED" && (
+              {isLandlordContext(role) && inquiry.status !== "CLOSED" && (
                 <div className="inquiry-status-actions">
                   {inquiry.status === "OPEN" && (
                     <button
@@ -160,5 +161,9 @@ export function InquiryList() {
       )}
     </section>
   );
-  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : <main className="discovery-page">{content}</main>;
+  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : isLandlordContext(role) ? <LandlordShell role={role}>{content}</LandlordShell> : <main className="discovery-page">{content}</main>;
+}
+
+function isLandlordContext(role: "TENANT" | "LANDLORD" | "ADMIN" | null): role is "LANDLORD" | "ADMIN" {
+  return role === "LANDLORD" || role === "ADMIN";
 }

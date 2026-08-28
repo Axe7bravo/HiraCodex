@@ -1,6 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { PropertyStatus, UserRole } from '@prisma/client';
+import {
+  PropertyStatus,
+  UserRole,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -227,12 +232,40 @@ describe('Landlord property management (e2e)', () => {
       });
   });
 
-  it('enforces authentication and the LANDLORD role', async () => {
+  it('allows LANDLORD and ADMIN owners while rejecting TENANT access', async () => {
     await request(app.getHttpServer()).get('/properties/mine').expect(401);
     const tenant = await authenticatedAgent('tenant-role', UserRole.TENANT);
     await tenant.post('/properties').send(validProperty()).expect(403);
     const admin = await authenticatedAdminAgent('admin-role');
-    await admin.get('/properties/mine').expect(403);
+    const adminProperty = getBody<PropertyBody>(
+      await admin
+        .post('/properties')
+        .send(validProperty('Admin-owned property'))
+        .expect(201),
+    );
+    expect(
+      getBody<PropertyBody[]>(await admin.get('/properties/mine').expect(200))
+        .map(({ id }) => id),
+    ).toContain(adminProperty.id);
+    for (const { name, contents } of validPhotos()) {
+      await admin
+        .post(`/properties/${adminProperty.id}/photos`)
+        .attach('photo', contents, { filename: name })
+        .expect(201);
+    }
+    await admin
+      .post(`/properties/${adminProperty.id}/submit-review`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect((body as { status: string }).status).toBe('PENDING_REVIEW');
+      });
+
+    const landlord = await authenticatedAgent('admin-scope-landlord', UserRole.LANDLORD);
+    const landlordProperty = getBody<PropertyBody>(
+      await landlord.post('/properties').send(validProperty('Landlord-owned property')).expect(201),
+    );
+    await admin.patch(`/properties/${landlordProperty.id}`).send({ title: 'Not admin-owned' }).expect(404);
+    await landlord.patch(`/properties/${adminProperty.id}`).send({ title: 'Not landlord-owned' }).expect(404);
   });
 
   it('creates, lists and edits only the authenticated landlord draft', async () => {
@@ -427,6 +460,19 @@ describe('Landlord property management (e2e)', () => {
       .post('/auth/register')
       .send(registration(name, role))
       .expect(201);
+    if (role === UserRole.LANDLORD) {
+      const owner = await prisma.user.findUniqueOrThrow({
+        where: { email: email(name) },
+        select: { id: true },
+      });
+      await prisma.verification.create({
+        data: {
+          userId: owner.id,
+          type: VerificationType.LANDLORD,
+          status: VerificationStatus.APPROVED,
+        },
+      });
+    }
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/auth/login')

@@ -30,7 +30,7 @@ import {
 
 @Controller('properties')
 @UseGuards(SessionAuthGuard, RolesGuard)
-@Roles(UserRole.LANDLORD)
+@Roles(UserRole.LANDLORD, UserRole.ADMIN)
 export class PropertiesController {
   constructor(private readonly properties: PropertiesService) {}
 
@@ -116,6 +116,6 @@ export class PropertiesController {
 
   @Post(':id/submit-review')
   submitReview(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.properties.submitReview(id, request.user.id);
+    return this.properties.submitReview(id, request.user.id, request.user.role);
   }
 }

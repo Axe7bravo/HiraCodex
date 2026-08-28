@@ -244,6 +244,71 @@
   min-width: 0;
   padding: clamp(1.25rem, 3vw, 2.25rem);
 }
+.landlord-area {
+  background: #f7f9fc;
+}
+.landlord-workspace-shell {
+  min-height: calc(100vh - 4rem);
+  display: grid;
+  grid-template-columns: 12.5rem minmax(0, 1fr);
+  background: #f7f9fc;
+}
+.landlord-workspace-nav {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #dfe5ed;
+  background: white;
+  padding: 1.5rem 0.75rem 1rem;
+}
+.landlord-workspace-nav > p {
+  margin: 0 0 0.65rem 0.6rem;
+  color: var(--muted-foreground);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.landlord-workspace-nav nav {
+  display: grid;
+  gap: 0.25rem;
+}
+.landlord-workspace-nav nav a {
+  min-height: 2.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  color: #4d5767;
+  font-size: 0.72rem;
+  font-weight: 780;
+  text-decoration: none;
+}
+.landlord-workspace-nav nav a svg { width: 0.95rem; }
+.landlord-workspace-nav nav a:hover,
+.landlord-workspace-nav nav a.active { background: #edf3ff; color: var(--brand-primary); }
+.landlord-workspace-nav nav a.active { border-right: 3px solid var(--brand-primary); }
+.landlord-trusted-admin {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: auto;
+  border-radius: 0.65rem;
+  background: #f4f8ff;
+  padding: 0.7rem;
+}
+.landlord-trusted-admin svg { width: 1rem; flex: 0 0 auto; color: var(--brand-primary); }
+.landlord-trusted-admin div { display: grid; gap: 0.2rem; }
+.landlord-trusted-admin strong { font-size: 0.68rem; }
+.landlord-trusted-admin span { color: var(--muted-foreground); font-size: 0.6rem; line-height: 1.35; }
+.landlord-workspace-content {
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+.landlord-workspace-content > .account-card,
+.landlord-workspace-content > .tenant-account-page {
+  width: min(100%, 72rem);
+  margin-inline: auto;
+}
 .tenant-workspace-content > .tenant-dashboard-main {
   padding: 0;
 }
@@ -3883,6 +3948,31 @@ dd {
   .site-header nav > a:first-child {
     display: none;
   }
+  .landlord-workspace-shell { display: block; }
+  .landlord-workspace-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: block;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid #dfe5ed;
+    padding: 0.5rem 0.65rem;
+  }
+  .landlord-workspace-nav > p,
+  .landlord-trusted-admin { display: none; }
+  .landlord-workspace-nav nav { width: max-content; display: flex; }
+  .landlord-workspace-nav nav a { white-space: nowrap; }
+  .landlord-workspace-nav nav a.active { border-right: 0; border-bottom: 2px solid var(--brand-primary); }
+  .site-header-admin-nav {
+    gap: 0.3rem !important;
+    font-size: 0.68rem !important;
+  }
+  .site-header-admin-nav .site-header-signout {
+    min-height: 2.25rem;
+    padding-inline: 0.45rem;
+    font-size: 0.68rem;
+  }
   .home-hero,
   .auth-layout {
     grid-template-columns: 1fr;
@@ -5156,6 +5246,7 @@ dd {
   .tenant-workspace-content {
     padding: 0.85rem 0.75rem 1.5rem;
   }
+  .landlord-workspace-content { padding: 0.85rem 0.75rem 1.5rem; }
   .tenant-workspace-content > .tenant-dashboard-main {
     padding: 0;
   }

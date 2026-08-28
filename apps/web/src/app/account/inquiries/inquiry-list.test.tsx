@@ -59,7 +59,7 @@ describe("InquiryList", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows landlord controls and reconciles the authoritative status", async () => {
+  it.each(["LANDLORD", "ADMIN"])("shows landlord controls for a %s owner and reconciles the authoritative status", async (role) => {
     const landlordInquiry = {
       id: "inquiry-1",
       propertyId: "property-1",
@@ -87,8 +87,9 @@ describe("InquiryList", () => {
       },
     };
     fetchMock
-      .mockResolvedValueOnce(response({ role: "LANDLORD" }))
+      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response([landlordInquiry]))
+      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(
         response({ ...landlordInquiry, status: "RESPONDED" }),
       );

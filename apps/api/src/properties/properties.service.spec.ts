@@ -1,9 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PropertyStatus } from '@prisma/client';
+import { Prisma, PropertyStatus, UserRole } from '@prisma/client';
 import { PropertiesService } from './properties.service';
 
 describe('PropertiesService', () => {
@@ -28,8 +29,9 @@ describe('PropertiesService', () => {
   const prisma = {
     property,
     propertyPhoto,
+    verification: { findFirst: jest.fn() },
     $transaction: jest.fn((callback: (client: unknown) => unknown) =>
-      callback({ property, propertyPhoto }),
+      callback({ property, propertyPhoto, verification: prisma.verification }),
     ),
   };
   const storage = { put: jest.fn(), get: jest.fn(), delete: jest.fn() };
@@ -40,6 +42,7 @@ describe('PropertiesService', () => {
     storage.put.mockResolvedValue(undefined);
     storage.delete.mockResolvedValue(undefined);
     propertyPhoto.findMany.mockResolvedValue([]);
+    prisma.verification.findFirst.mockResolvedValue({ id: 'verification-1' });
   });
 
   it('lists only the authenticated landlord properties', async () => {
@@ -350,7 +353,7 @@ describe('PropertiesService', () => {
       status: PropertyStatus.PENDING_REVIEW,
     });
     await expect(
-      service.submitReview('property-1', 'landlord-1'),
+      service.submitReview('property-1', 'landlord-1', UserRole.LANDLORD),
     ).resolves.toMatchObject({ status: PropertyStatus.PENDING_REVIEW });
     expect(property.updateMany).toHaveBeenCalledWith({
       where: {
@@ -377,15 +380,46 @@ describe('PropertiesService', () => {
       _count: { photos: 2 },
     });
     await expect(
-      service.submitReview('property-1', 'landlord-1'),
+      service.submitReview('property-1', 'landlord-1', UserRole.LANDLORD),
     ).rejects.toBeInstanceOf(BadRequestException);
     property.findFirst.mockResolvedValueOnce({
       status: PropertyStatus.PENDING_REVIEW,
       _count: { photos: 3 },
     });
     await expect(
-      service.submitReview('property-1', 'landlord-1'),
+      service.submitReview('property-1', 'landlord-1', UserRole.LANDLORD),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('allows an ADMIN owner to submit without a landlord verification row', async () => {
+    property.findFirst.mockResolvedValue({
+      status: PropertyStatus.DRAFT,
+      _count: { photos: 3 },
+    });
+    property.updateMany.mockResolvedValue({ count: 1 });
+    property.findUniqueOrThrow.mockResolvedValue({
+      status: PropertyStatus.PENDING_REVIEW,
+    });
+
+    await service.submitReview('property-1', 'admin-1', UserRole.ADMIN);
+
+    expect(prisma.verification.findFirst).not.toHaveBeenCalled();
+    expect(property.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ landlordId: 'admin-1' }) }),
+    );
+  });
+
+  it('requires an approved verification for a normal LANDLORD submission', async () => {
+    property.findFirst.mockResolvedValue({
+      status: PropertyStatus.DRAFT,
+      _count: { photos: 3 },
+    });
+    prisma.verification.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.submitReview('property-1', 'landlord-1', UserRole.LANDLORD),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(property.updateMany).not.toHaveBeenCalled();
   });
 });
 

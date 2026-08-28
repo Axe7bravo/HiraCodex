@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, UserProfile } from "@/lib/api";
 import { TenantDashboard } from "./tenant-dashboard";
 import { AdminDashboard } from "./admin-dashboard";
+import { LandlordWorkspace } from "@/components/landlord-shell";
 
 type ProfileForm = {
   firstName: string;
@@ -156,7 +157,8 @@ export function AccountClient() {
   }
 
   return (
-    <section className="account-card profile-card">
+    <LandlordWorkspace role="LANDLORD">
+    <section className="account-card profile-card landlord-profile-card">
       <div className="profile-heading">
         <div>
           <p className="eyebrow">Profile settings</p>
@@ -336,6 +338,7 @@ export function AccountClient() {
         </button>
       </form>
     </section>
+    </LandlordWorkspace>
   );
 }
 

@@ -33,7 +33,7 @@ export class InquiriesController {
   }
 
   @Get('inquiries')
-  @Roles(UserRole.TENANT, UserRole.LANDLORD)
+  @Roles(UserRole.TENANT, UserRole.LANDLORD, UserRole.ADMIN)
   list(@Req() request: AuthenticatedRequest) {
     return request.user.role === UserRole.TENANT
       ? this.inquiries.listForTenant(request.user.id)
@@ -41,7 +41,7 @@ export class InquiriesController {
   }
 
   @Patch('inquiries/:id/status')
-  @Roles(UserRole.LANDLORD)
+  @Roles(UserRole.LANDLORD, UserRole.ADMIN)
   updateStatus(
     @Param('id') id: string,
     @Body() input: UpdateInquiryStatusDto,

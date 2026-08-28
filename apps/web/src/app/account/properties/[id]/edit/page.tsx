@@ -1,4 +1,4 @@
-import { SiteHeader } from "@/components/site-header";
+import { LandlordShell } from "@/components/landlord-shell";
 import { PropertyForm } from "../../property-form";
 
 export default async function EditPropertyPage({
@@ -8,11 +8,6 @@ export default async function EditPropertyPage({
 }) {
   const { id } = await params;
   return (
-    <main className="auth-page">
-      <SiteHeader />
-      <div className="account-shell property-shell">
-        <PropertyForm propertyId={id} />
-      </div>
-    </main>
+    <LandlordShell><PropertyForm propertyId={id} /></LandlordShell>
   );
 }

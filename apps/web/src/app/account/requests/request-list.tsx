@@ -8,9 +8,10 @@ import {
   type UserProfile,
 } from "@/lib/api";
 import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
+import { LandlordShell } from "@/components/landlord-shell";
 
 export function RequestList() {
-  const [role, setRole] = useState<"TENANT" | "LANDLORD" | null>(null);
+  const [role, setRole] = useState<"TENANT" | "LANDLORD" | "ADMIN" | null>(null);
   const [items, setItems] = useState<AccommodationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -24,7 +25,7 @@ export function RequestList() {
       apiRequest<AccommodationRequest[]>("/requests"),
     ])
       .then(([user, requests]) => {
-        if (user.role === "TENANT" || user.role === "LANDLORD")
+        if (user.role === "TENANT" || user.role === "LANDLORD" || user.role === "ADMIN")
           setRole(user.role);
         setItems(requests);
       })
@@ -60,10 +61,10 @@ export function RequestList() {
       <header className={role === "TENANT" ? "tenant-page-heading" : "discovery-heading"}>
         <p className="eyebrow">Account</p>
         <h1>
-          {role === "LANDLORD" ? "Accommodation requests" : "Your requests"}
+          {isLandlordContext(role) ? "Accommodation requests" : "Your requests"}
         </h1>
         <p>
-          {role === "LANDLORD"
+          {isLandlordContext(role)
             ? "Review requests for properties you manage."
             : "Track your accommodation requests."}
         </p>
@@ -102,7 +103,7 @@ export function RequestList() {
       )}
     </section>
   );
-  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : <main className="discovery-page">{content}</main>;
+  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : isLandlordContext(role) ? <LandlordShell role={role}>{content}</LandlordShell> : <main className="discovery-page">{content}</main>;
 }
 
 function RequestCard({
@@ -112,7 +113,7 @@ function RequestCard({
   transition,
 }: {
   request: AccommodationRequest;
-  role: "TENANT" | "LANDLORD" | null;
+  role: "TENANT" | "LANDLORD" | "ADMIN" | null;
   updating: boolean;
   transition: (
     request: AccommodationRequest,
@@ -138,7 +139,7 @@ function RequestCard({
         {new Date(request.preferredMoveInDate).toLocaleDateString("en-LS")}
       </p>
       {request.note && <p>{request.note}</p>}
-      {role === "LANDLORD" && request.tenant && (
+      {isLandlordContext(role) && request.tenant && (
         <div className="inquiry-contact">
           <strong>
             {request.tenant.firstName} {request.tenant.lastName}
@@ -169,7 +170,7 @@ function RequestCard({
             >
               {updating ? "Updating…" : "Cancel request"}
             </button>
-          ) : role === "LANDLORD" ? (
+          ) : isLandlordContext(role) ? (
             <>
               <button
                 className="button button-primary"
@@ -194,4 +195,8 @@ function RequestCard({
       </small>
     </article>
   );
+}
+
+function isLandlordContext(role: "TENANT" | "LANDLORD" | "ADMIN" | null): role is "LANDLORD" | "ADMIN" {
+  return role === "LANDLORD" || role === "ADMIN";
 }

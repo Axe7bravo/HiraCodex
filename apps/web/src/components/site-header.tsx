@@ -43,6 +43,10 @@ export function SiteHeader() {
     session !== "loading" && session !== "guest" ? session : null;
   const inAccount = pathname.startsWith("/account");
   const inAdmin = pathname.startsWith("/admin");
+  const inLandlordWorkspace =
+    pathname.startsWith("/account/properties") ||
+    pathname.startsWith("/account/inquiries") ||
+    pathname.startsWith("/account/requests");
   const inPropertyDiscovery = pathname.startsWith("/properties");
   const accountLabel =
     authenticatedProfile?.role === "ADMIN"
@@ -50,15 +54,16 @@ export function SiteHeader() {
       : authenticatedProfile?.role === "LANDLORD"
         ? "Landlord account"
         : "My account";
-  const inRoleArea =
-    inAccount || (authenticatedProfile?.role === "ADMIN" && inAdmin);
+  const inAdminArea =
+    authenticatedProfile?.role === "ADMIN" &&
+    (inAdmin || (pathname === "/account" && !inLandlordWorkspace));
 
   return (
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Hira home">
         Hira<span>.</span>
       </Link>
-      <nav aria-label="Account navigation">
+      <nav className={authenticatedProfile?.role === "ADMIN" ? "site-header-admin-nav" : undefined} aria-label="Account navigation">
         <Link
           className={inPropertyDiscovery ? "site-header-current" : undefined}
           href="/properties"
@@ -68,13 +73,14 @@ export function SiteHeader() {
         </Link>
         {authenticatedProfile ? (
           <>
-            <Link
-              className={inRoleArea ? "site-header-current" : undefined}
-              href="/account"
-              aria-current={inRoleArea ? "page" : undefined}
-            >
-              {accountLabel}
-            </Link>
+            {authenticatedProfile.role === "ADMIN" ? (
+              <>
+                <Link className={inAdminArea ? "site-header-current" : undefined} href="/account" aria-current={inAdminArea ? "page" : undefined}>Admin dashboard</Link>
+                <Link className={inLandlordWorkspace ? "site-header-current" : undefined} href="/account/properties" aria-current={inLandlordWorkspace ? "page" : undefined}>Landlord workspace</Link>
+              </>
+            ) : (
+              <Link className={inAccount ? "site-header-current" : undefined} href="/account" aria-current={inAccount ? "page" : undefined}>{accountLabel}</Link>
+            )}
             <button
               className="site-header-signout"
               type="button"

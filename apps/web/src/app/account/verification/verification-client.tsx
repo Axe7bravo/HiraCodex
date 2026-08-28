@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiRequest, UserProfile, VerificationSubmission } from "@/lib/api";
 import { TenantStatus, TenantWorkspace } from "@/components/tenant-shell";
 import { VerificationDocumentPreview } from "@/components/verification-document-preview";
+import { LandlordWorkspace } from "@/components/landlord-shell";
 
 const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
 const maxBytes = 10 * 1024 * 1024;
@@ -181,7 +182,7 @@ export function VerificationClient() {
       <Link href="/account">Back to profile</Link>
     </section>
   );
-  return landlord ? <div className="account-shell profile-shell">{card}</div> : <div className="account-overview-shell"><TenantWorkspace>{card}</TenantWorkspace></div>;
+  return landlord ? <div className="account-overview-shell"><LandlordWorkspace role="LANDLORD">{card}</LandlordWorkspace></div> : <div className="account-overview-shell"><TenantWorkspace>{card}</TenantWorkspace></div>;
 }
 
 function SelectedFiles({ files }: { files: File[] }) {

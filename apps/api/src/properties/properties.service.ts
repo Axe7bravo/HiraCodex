@@ -1,12 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PropertyStatus } from '@prisma/client';
+import {
+  Prisma,
+  PropertyStatus,
+  UserRole,
+  VerificationStatus,
+  VerificationType,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
@@ -291,7 +298,7 @@ export class PropertiesService {
     await this.cleanup([objectKey]);
   }
 
-  async submitReview(id: string, landlordId: string) {
+  async submitReview(id: string, landlordId: string, role: UserRole) {
     return this.prisma.$transaction(
       async (transaction) => {
         const property = await transaction.property.findFirst({
@@ -311,6 +318,21 @@ export class PropertiesService {
           throw new BadRequestException(
             'A property requires between 3 and 10 photos before submission',
           );
+        }
+        if (role !== UserRole.ADMIN) {
+          const approvedVerification = await transaction.verification.findFirst({
+            where: {
+              userId: landlordId,
+              type: VerificationType.LANDLORD,
+              status: VerificationStatus.APPROVED,
+            },
+            select: { id: true },
+          });
+          if (!approvedVerification) {
+            throw new ForbiddenException(
+              'Approved landlord verification is required before listing submission',
+            );
+          }
         }
         const updated = await transaction.property.updateMany({
           where: { id, landlordId, status: { in: manageableStatuses } },

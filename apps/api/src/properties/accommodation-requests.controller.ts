@@ -32,7 +32,7 @@ export class AccommodationRequestsController {
   }
 
   @Get('requests')
-  @Roles(UserRole.TENANT, UserRole.LANDLORD)
+  @Roles(UserRole.TENANT, UserRole.LANDLORD, UserRole.ADMIN)
   list(@Req() request: AuthenticatedRequest) {
     return request.user.role === UserRole.TENANT
       ? this.requests.listForTenant(request.user.id)
@@ -40,13 +40,13 @@ export class AccommodationRequestsController {
   }
 
   @Patch('requests/:id/accept')
-  @Roles(UserRole.LANDLORD)
+  @Roles(UserRole.LANDLORD, UserRole.ADMIN)
   accept(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.requests.decide(request.user.id, id, 'ACCEPTED');
   }
 
   @Patch('requests/:id/decline')
-  @Roles(UserRole.LANDLORD)
+  @Roles(UserRole.LANDLORD, UserRole.ADMIN)
   decline(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.requests.decide(request.user.id, id, 'DECLINED');
   }

@@ -277,7 +277,7 @@ describe('Public property detail and tenant favourites (e2e)', () => {
     await tenantA
       .patch(`/inquiries/${created.id}/status`)
       .send({ status: 'RESPONDED' })
-      .expect(403);
+      .expect(404);
     await (
       await authenticatedAgent('admin')
     )
