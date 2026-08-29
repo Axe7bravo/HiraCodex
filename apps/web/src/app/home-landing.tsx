@@ -180,7 +180,7 @@ function LandingPropertyCard({ property }: { property: DiscoveryProperty }) {
   return (
     <article className="marketplace-card landing-property-card">
       <Link className="marketplace-card-image" href={`/properties/${property.id}`}>
-        {photo && !imageFailed ? <Image src={photoUrl(property, photo.id)} alt={`${property.title} listing`} fill sizes="(max-width: 680px) 88vw, (max-width: 1000px) 44vw, 23vw" unoptimized onError={() => setImageFailed(true)} /> : <span className="marketplace-image-fallback" role="img" aria-label="Property image unavailable"><Home aria-hidden="true" /> Image unavailable</span>}
+        {photo && !imageFailed ? <Image src={photoUrl(property, photo.id)} alt={`${property.title} listing`} fill sizes="(max-width: 680px) 88vw, (max-width: 1000px) 44vw, 23vw" onError={() => setImageFailed(true)} /> : <span className="marketplace-image-fallback" role="img" aria-label="Property image unavailable"><Home aria-hidden="true" /> Image unavailable</span>}
       </Link>
       <div className="marketplace-card-body">
         <h2><Link href={`/properties/${property.id}`}>{property.title}</Link></h2>

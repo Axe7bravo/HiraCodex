@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { apiRequest, UserProfile, VerificationSubmission } from "@/lib/api";
+import { apiRequest, getCurrentUser, UserProfile, VerificationSubmission } from "@/lib/api";
 import { TenantStatus, TenantWorkspace } from "@/components/tenant-shell";
 import { VerificationDocumentPreview } from "@/components/verification-document-preview";
 import { LandlordStatus, LandlordWorkspace } from "@/components/landlord-shell";
@@ -27,7 +27,7 @@ export function VerificationClient() {
 
   useEffect(() => {
     Promise.all([
-      apiRequest<UserProfile>("/users/me"),
+      getCurrentUser(),
       apiRequest<VerificationSubmission>("/verifications/me"),
     ])
       .then(([loadedProfile, loadedVerification]) => {

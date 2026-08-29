@@ -53,7 +53,6 @@ export function SavedProperties() {
                 {property.photos[0] && !failedPhotos.includes(property.id) ? (
                   <Image
                     fill
-                    unoptimized
                     sizes="(max-width: 760px) 100vw, 33vw"
                     src={`${apiUrl}/discovery/properties/${property.id}/photos/${property.photos[0].id}`}
                     alt={`${property.title} listing`}

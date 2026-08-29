@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { apiRequest, UserProfile } from "@/lib/api";
+import { apiRequest, getCurrentUser, UserProfile } from "@/lib/api";
 import { TenantDashboard } from "./tenant-dashboard";
 import { AdminDashboard } from "./admin-dashboard";
 import { LandlordDashboard } from "./landlord-dashboard";
@@ -31,7 +31,7 @@ export function AccountClient({ landlordContext = false }: { landlordContext?: b
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    apiRequest<UserProfile>("/users/me")
+    getCurrentUser()
       .then((loaded) => {
         setProfile(loaded);
         setForm(toForm(loaded));

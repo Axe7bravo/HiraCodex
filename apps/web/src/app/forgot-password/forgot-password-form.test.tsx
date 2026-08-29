@@ -32,7 +32,7 @@ describe("ForgotPasswordForm", () => {
       "If an account exists for that email",
     );
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("http://localhost:4000/auth/forgot-password");
+    expect(url).toBe("/api/auth/forgot-password");
     expect(JSON.parse(options.body)).toEqual({ email: "student@example.com" });
   });
 

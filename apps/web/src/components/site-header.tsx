@@ -3,19 +3,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { apiRequest, type UserProfile } from "@/lib/api";
+import { apiRequest, getCurrentUser, type UserProfile } from "@/lib/api";
 
-export function SiteHeader({ landlordContext = false }: { landlordContext?: boolean }) {
+export function SiteHeader({ landlordContext = false, initialProfile }: { landlordContext?: boolean; initialProfile?: UserProfile }) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<
     "loading" | "guest" | UserProfile
-  >("loading");
+  >(initialProfile ?? "loading");
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    if (initialProfile) {
+      setSession(initialProfile);
+      return;
+    }
     let current = true;
-    apiRequest<UserProfile>("/users/me")
+    getCurrentUser()
       .then((profile) => {
         if (current) setSession(profile);
       })
@@ -25,7 +29,7 @@ export function SiteHeader({ landlordContext = false }: { landlordContext?: bool
     return () => {
       current = false;
     };
-  }, []);
+  }, [initialProfile]);
 
   async function logout() {
     setSigningOut(true);

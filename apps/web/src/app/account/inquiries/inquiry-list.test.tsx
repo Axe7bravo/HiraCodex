@@ -98,7 +98,6 @@ describe("InquiryList", () => {
     fetchMock
       .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response([landlordInquiry]))
-      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(
         response({ ...landlordInquiry, status: "RESPONDED" }),
       );
@@ -123,6 +122,7 @@ describe("InquiryList", () => {
         body: JSON.stringify({ status: "RESPONDED" }),
       }),
     );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

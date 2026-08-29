@@ -63,7 +63,7 @@ describe("VerificationClient", () => {
 
     expect(await screen.findByText("PENDING")).toBeInTheDocument();
     const [url, options] = fetchMock.mock.calls[2];
-    expect(url).toBe("http://localhost:4000/verifications");
+    expect(url).toBe("/api/verifications");
     expect(options.body).toBeInstanceOf(FormData);
     expect(options.headers).toBeUndefined();
     expect((options.body as FormData).getAll("documents")).toHaveLength(1);
@@ -133,7 +133,7 @@ describe("VerificationClient", () => {
     const { unmount } = render(<VerificationClient />);
 
     expect(await screen.findByLabelText("Preview of evidence.pdf")).toHaveAttribute("data", "blob:own-verification");
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:4000/verifications/me/documents/document-1", { credentials: "include" });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/verifications/me/documents/document-1", { credentials: "include" });
     unmount();
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:own-verification");
   });

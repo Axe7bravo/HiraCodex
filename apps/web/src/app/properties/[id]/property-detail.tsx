@@ -25,9 +25,9 @@ import {
   apiRequest,
   apiUrl,
   ApiError,
+  getCurrentUser,
   type FavouriteItem,
   type PublicPropertyDetail,
-  type UserProfile,
 } from "@/lib/api";
 import { trackAnalytics } from "@/lib/analytics";
 
@@ -55,9 +55,15 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
 
   useEffect(() => {
     async function load() {
-      const detail = await apiRequest<PublicPropertyDetail>(
-        `/discovery/properties/${propertyId}`,
-      );
+      const [detail, user] = await Promise.all([
+        apiRequest<PublicPropertyDetail>(
+          `/discovery/properties/${propertyId}`,
+        ),
+        getCurrentUser().catch((reason: unknown) => {
+          if (reason instanceof ApiError && reason.status === 401) return null;
+          throw reason;
+        }),
+      ]);
       setProperty(detail);
       if (trackedPropertyId.current !== detail.id) {
         trackedPropertyId.current = detail.id;
@@ -67,17 +73,11 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
           area: detail.area,
         });
       }
-      try {
-        const user = await apiRequest<UserProfile>("/users/me");
-        if (user.role !== "TENANT") return setViewer("other");
-        const favourites = await apiRequest<FavouriteItem[]>("/favourites");
-        setSaved(favourites.some((item) => item.propertyId === propertyId));
-        setViewer("tenant");
-      } catch (reason) {
-        if (reason instanceof ApiError && reason.status === 401)
-          return setViewer("guest");
-        throw reason;
-      }
+      if (!user) return setViewer("guest");
+      if (user.role !== "TENANT") return setViewer("other");
+      const favourites = await apiRequest<FavouriteItem[]>("/favourites");
+      setSaved(favourites.some((item) => item.propertyId === propertyId));
+      setViewer("tenant");
     }
     load()
       .catch((reason: Error) => setError(reason.message))
@@ -435,7 +435,6 @@ function PropertyGallery({ property }: { property: PublicPropertyDetail }) {
       <div className="detail-gallery-main">
         <Image
           fill
-          unoptimized
           priority
           sizes="(max-width: 760px) 100vw, 70vw"
           src={photoUrl(property.id, selected.id)}
@@ -461,7 +460,6 @@ function PropertyGallery({ property }: { property: PublicPropertyDetail }) {
               ) : (
                 <Image
                   fill
-                  unoptimized
                   sizes="(max-width: 760px) 33vw, 24vw"
                   src={photoUrl(property.id, photo.id)}
                   alt=""

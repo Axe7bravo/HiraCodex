@@ -37,7 +37,7 @@ describe("PropertyForm", () => {
       "Property changes saved. Current status: DRAFT",
     );
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("http://localhost:4000/properties");
+    expect(url).toBe("/api/properties");
     expect(options.method).toBe("POST");
     expect(JSON.parse(options.body)).toMatchObject({
       monthlyPrice: "1450.50",
@@ -83,7 +83,7 @@ describe("PropertyForm", () => {
       "Property details cannot be changed while review is in progress.",
     );
     expect(fetchMock.mock.calls[1]).toEqual([
-      "http://localhost:4000/properties/property-1/submit-review",
+      "/api/properties/property-1/submit-review",
       expect.objectContaining({ method: "POST" }),
     ]);
     expect(
@@ -119,7 +119,7 @@ describe("PropertyForm", () => {
     expect(await screen.findByText("Changes saved.")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toHaveValue("Updated Roma room");
     const [url, options] = fetchMock.mock.calls[1];
-    expect(url).toBe("http://localhost:4000/properties/property-1");
+    expect(url).toBe("/api/properties/property-1");
     expect(options.method).toBe("PATCH");
     const payload = JSON.parse(options.body);
     expect(payload).toMatchObject({ title: "Updated Roma room", roomType: "Studio", amenities: ["Wi-Fi", "Kitchen"] });
@@ -184,7 +184,7 @@ describe("PropertyForm", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Submit for review" })).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]).toEqual([
-      "http://localhost:4000/properties/property-1",
+      "/api/properties/property-1",
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({ status: "PAUSED" }),

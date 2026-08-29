@@ -35,7 +35,6 @@ describe("RequestList", () => {
     fetchMock
       .mockResolvedValueOnce(response({ role: "TENANT" }))
       .mockResolvedValueOnce(response([pending]))
-      .mockResolvedValueOnce(response({ role: "TENANT" }))
       .mockResolvedValueOnce(response({ ...pending, status: "CANCELLED" }));
     render(<RequestList />);
     fireEvent.click(
@@ -47,6 +46,7 @@ describe("RequestList", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel request" }),
     ).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it.each(["LANDLORD", "ADMIN"])("lets a %s property owner accept a PENDING request with safe tenant context", async (role) => {
@@ -64,7 +64,6 @@ describe("RequestList", () => {
     fetchMock
       .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response([pending]))
-      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response({ ...pending, status: "ACCEPTED" }));
     render(<RequestList />);
     expect(await screen.findByText("Verified student")).toBeInTheDocument();
@@ -84,7 +83,6 @@ describe("RequestList", () => {
     fetchMock
       .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response([pending]))
-      .mockResolvedValueOnce(response({ role }))
       .mockResolvedValueOnce(response(declined));
     render(<RequestList />);
     fireEvent.click(await screen.findByRole("button", { name: "Decline request" }));

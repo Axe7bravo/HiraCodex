@@ -7,7 +7,7 @@ import {
   ApiError,
   apiRequest,
   apiUrl,
-  UserProfile,
+  getCurrentUser,
 } from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
 
@@ -39,7 +39,7 @@ export function AdminPropertyReview({ id }: { id: string }) {
   useEffect(() => {
     Promise.all([
       apiRequest<AdminPropertyDetail>(`/admin/properties/${id}`),
-      apiRequest<UserProfile>("/users/me"),
+      getCurrentUser(),
     ])
       .then(([property, reviewer]) => {
         setDetail(property);

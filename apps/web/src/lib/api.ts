@@ -276,3 +276,14 @@ export async function apiRequest<T>(
     ? (undefined as T)
     : ((await response.json()) as T);
 }
+
+let currentUserRequest: Promise<UserProfile> | null = null;
+
+export function getCurrentUser(): Promise<UserProfile> {
+  if (!currentUserRequest) {
+    currentUserRequest = apiRequest<UserProfile>("/users/me").finally(() => {
+      currentUserRequest = null;
+    });
+  }
+  return currentUserRequest;
+}

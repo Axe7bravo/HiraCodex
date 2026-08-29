@@ -36,7 +36,7 @@ describe("PropertyList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(await screen.findByText("Property paused.")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toBe(
-      "http://localhost:4000/properties/property-1",
+      "/api/properties/property-1",
     );
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "PATCH" });
 

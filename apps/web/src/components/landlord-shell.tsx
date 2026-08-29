@@ -5,19 +5,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, FileQuestion, Home, MessageCircleMore, ShieldCheck } from "lucide-react";
 import { SiteHeader } from "./site-header";
-import { apiRequest, type UserProfile } from "@/lib/api";
+import { getCurrentUser, type UserProfile } from "@/lib/api";
 
 type LandlordContextRole = "LANDLORD" | "ADMIN";
 
-export function LandlordShell({ children, role: suppliedRole }: { children: ReactNode; role?: LandlordContextRole }) {
-  const [role, setRole] = useState<LandlordContextRole | null>(suppliedRole ?? null);
+export function LandlordShell({ children, role: suppliedRole, profile }: { children: ReactNode; role?: LandlordContextRole; profile?: UserProfile }) {
+  const [role, setRole] = useState<LandlordContextRole | null>(suppliedRole ?? (profile?.role === "ADMIN" || profile?.role === "LANDLORD" ? profile.role : null));
   useEffect(() => {
-    if (suppliedRole) return;
-    apiRequest<UserProfile>("/users/me").then((profile) => {
-      if (profile.role === "ADMIN" || profile.role === "LANDLORD") setRole(profile.role);
+    if (suppliedRole || profile) return;
+    getCurrentUser().then((loadedProfile) => {
+      if (loadedProfile.role === "ADMIN" || loadedProfile.role === "LANDLORD") setRole(loadedProfile.role);
     }).catch(() => undefined);
-  }, [suppliedRole]);
-  return <main className="account-overview-page landlord-area"><SiteHeader /><div className="account-overview-shell"><LandlordWorkspace role={role}>{children}</LandlordWorkspace></div></main>;
+  }, [profile, suppliedRole]);
+  return <main className="account-overview-page landlord-area"><SiteHeader initialProfile={profile} /><div className="account-overview-shell"><LandlordWorkspace role={role}>{children}</LandlordWorkspace></div></main>;
 }
 
 export function LandlordWorkspace({ children, role }: { children: ReactNode; role: LandlordContextRole | null }) {

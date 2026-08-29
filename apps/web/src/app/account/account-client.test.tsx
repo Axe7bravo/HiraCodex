@@ -63,7 +63,7 @@ describe("AccountClient", () => {
       "Profile saved successfully",
     );
     const [url, options] = fetchMock.mock.calls[5];
-    expect(url).toBe("http://localhost:4000/users/me");
+    expect(url).toBe("/api/users/me");
     expect(options.method).toBe("PATCH");
     expect(JSON.parse(options.body)).toMatchObject({
       firstName: "Mpho",

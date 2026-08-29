@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   apiRequest,
+  getCurrentUser,
   type AccommodationRequest,
   type UserProfile,
 } from "@/lib/api";
@@ -11,6 +12,7 @@ import { TenantShell, TenantStatus } from "@/components/tenant-shell";
 import { LandlordShell, LandlordStatus } from "@/components/landlord-shell";
 
 export function RequestList() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<"TENANT" | "LANDLORD" | "ADMIN" | null>(null);
   const [items, setItems] = useState<AccommodationRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,10 +24,11 @@ export function RequestList() {
 
   useEffect(() => {
     Promise.all([
-      apiRequest<UserProfile>("/users/me"),
+      getCurrentUser(),
       apiRequest<AccommodationRequest[]>("/requests"),
     ])
       .then(([user, requests]) => {
+        setProfile(user);
         if (user.role === "TENANT" || user.role === "LANDLORD" || user.role === "ADMIN")
           setRole(user.role);
         setItems(requests);
@@ -140,7 +143,7 @@ export function RequestList() {
       )}
     </section>
   );
-  return role === "TENANT" ? <TenantShell>{content}</TenantShell> : isLandlordContext(role) ? <LandlordShell role={role}>{content}</LandlordShell> : <main className="discovery-page">{content}</main>;
+  return role === "TENANT" ? <TenantShell profile={profile ?? undefined}>{content}</TenantShell> : isLandlordContext(role) ? <LandlordShell role={role} profile={profile ?? undefined}>{content}</LandlordShell> : <main className="discovery-page">{content}</main>;
 }
 
 function RequestCard({

@@ -35,12 +35,22 @@ describe("PropertyDiscovery", () => {
 
     expect(screen.getByText("Loading approved homes…")).toBeInTheDocument();
     expect(await screen.findByText("Roma garden room")).toBeInTheDocument();
-    expect(
-      screen.getByRole("img", { name: "Roma garden room listing" }),
-    ).toHaveAttribute(
+    const image = screen.getByRole("img", {
+      name: "Roma garden room listing",
+    });
+    expect(image).toHaveAttribute(
       "src",
-      "http://localhost:4000/discovery/properties/property-1/photos/photo-1",
+      expect.stringContaining("/_next/image?"),
     );
+    expect(image).toHaveAttribute(
+      "src",
+      expect.stringContaining(
+        encodeURIComponent(
+          "/api/discovery/properties/property-1/photos/photo-1",
+        ),
+      ),
+    );
+    expect(image.getAttribute("src")).not.toContain("localhost:4000");
     expect(screen.getAllByText("Wi-Fi")).toHaveLength(2);
     expect(screen.queryByText("Hira approved")).not.toBeInTheDocument();
     expect(trackAnalyticsMock).toHaveBeenCalledWith("property_search", {

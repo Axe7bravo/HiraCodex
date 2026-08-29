@@ -663,7 +663,6 @@ function PropertyCard({
             alt={`${property.title} listing`}
             fill
             sizes="(max-width: 680px) 100vw, (max-width: 1080px) 50vw, 25vw"
-            unoptimized
             loading={eagerImage ? "eager" : "lazy"}
             onError={() => setImageFailed(true)}
           />

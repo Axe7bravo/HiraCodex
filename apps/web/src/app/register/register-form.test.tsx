@@ -31,7 +31,7 @@ describe("RegisterForm", () => {
       expect(push).toHaveBeenCalledWith("/login?registered=1"),
     );
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("http://localhost:4000/auth/register");
+    expect(url).toBe("/api/auth/register");
     expect(options.credentials).toBe("include");
     expect(JSON.parse(options.body)).toMatchObject({
       role: "TENANT",

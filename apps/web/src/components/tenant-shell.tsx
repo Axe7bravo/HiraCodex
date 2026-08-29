@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CircleUserRound, FileQuestion, Heart, Home, MessageCircleMore, Search, ShieldCheck } from "lucide-react";
 import { SiteHeader } from "./site-header";
+import type { UserProfile } from "@/lib/api";
 
-export function TenantShell({ children }: { children: ReactNode }) {
-  return <main className="account-overview-page"><SiteHeader /><div className="account-overview-shell"><TenantWorkspace>{children}</TenantWorkspace></div></main>;
+export function TenantShell({ children, profile }: { children: ReactNode; profile?: UserProfile }) {
+  return <main className="account-overview-page"><SiteHeader initialProfile={profile} /><div className="account-overview-shell"><TenantWorkspace>{children}</TenantWorkspace></div></main>;
 }
 
 export function TenantWorkspace({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
