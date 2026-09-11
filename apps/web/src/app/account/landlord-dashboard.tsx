@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Building2, ChevronRight, FileQuestion, MessageCircleMore, Plus, ShieldCheck } from "lucide-react";
 import { LandlordStatus, LandlordWorkspace } from "@/components/landlord-shell";
 import { apiRequest, type AccommodationRequest, type Inquiry, type LandlordProperty, type UserProfile } from "@/lib/api";
+import { formatMaloti } from "@/lib/format-money";
 
 type LandlordContextProfile =
   | Extract<UserProfile, { role: "LANDLORD" }>
@@ -43,7 +44,7 @@ export function LandlordDashboard({ profile, profileEditor }: { profile: Landlor
       </section>
       <div className="landlord-overview-grid">
         <OverviewPanel title="Listings" href="/account/properties" loading={loading} empty={properties.length === 0} emptyText="List your first property on Hira.">
-          {properties.slice(0, 4).map((property) => <article key={property.id}><div><strong>{property.title}</strong><span>{property.area} · M {Number(property.monthlyPrice).toLocaleString()} / month</span></div><LandlordStatus status={property.status} /></article>)}
+          {properties.slice(0, 4).map((property) => <article key={property.id}><div><strong>{property.title}</strong><span>{property.area} · {formatMaloti(property.monthlyPrice)} / month</span></div><LandlordStatus status={property.status} /></article>)}
         </OverviewPanel>
         <div className="landlord-activity-stack">
           <OverviewPanel title="Recent inquiries" href="/account/inquiries" loading={loading} empty={inquiries.length === 0} emptyText="No tenant inquiries yet.">{inquiries.slice(0, 3).map((item) => <article key={item.id}><div><strong>{item.property.title}</strong><span>{item.tenant ? `${item.tenant.firstName} ${item.tenant.lastName}` : "Tenant inquiry"}</span></div><LandlordStatus status={item.status} /></article>)}</OverviewPanel>

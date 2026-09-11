@@ -33,6 +33,7 @@ import {
   type DiscoveryPage,
   type DiscoveryProperty,
 } from "@/lib/api";
+import { formatMaloti } from "@/lib/format-money";
 import { trackAnalytics } from "@/lib/analytics";
 import {
   discoveryAmenities,
@@ -387,10 +388,10 @@ export function PropertyDiscovery() {
                   )}
                   <div className="marketplace-price-values" aria-live="polite">
                     <span>
-                      Min: {minPriceActive ? formatLsl(minPrice) : "Any"}
+                      Min: {minPriceActive ? formatMaloti(minPrice) : "Any"}
                     </span>
                     <span>
-                      Max: {maxPriceActive ? formatLsl(maxPrice) : "Any"}
+                      Max: {maxPriceActive ? formatMaloti(maxPrice) : "Any"}
                     </span>
                   </div>
                   <div
@@ -408,7 +409,7 @@ export function PropertyDiscovery() {
                       max={discoveryPriceRange.max}
                       step={discoveryPriceRange.step}
                       value={minPrice}
-                      aria-valuetext={formatLsl(minPrice)}
+                      aria-valuetext={formatMaloti(minPrice)}
                       onChange={(event) => {
                         setMinPriceActive(true);
                         setMinPrice(
@@ -426,7 +427,7 @@ export function PropertyDiscovery() {
                       max={discoveryPriceRange.max}
                       step={discoveryPriceRange.step}
                       value={maxPrice}
-                      aria-valuetext={formatLsl(maxPrice)}
+                      aria-valuetext={formatMaloti(maxPrice)}
                       onChange={(event) => {
                         setMaxPriceActive(true);
                         setMaxPrice(
@@ -645,11 +646,7 @@ function PropertyCard({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const photo = property.photos[0];
-  const price = new Intl.NumberFormat("en-LS", {
-    style: "currency",
-    currency: "LSL",
-    maximumFractionDigits: 2,
-  }).format(Number(property.monthlyPrice));
+  const price = formatMaloti(property.monthlyPrice);
 
   return (
     <article className="marketplace-card">
@@ -713,14 +710,6 @@ function clampPrice(value: string | null, fallback: number) {
     discoveryPriceRange.max,
     Math.max(discoveryPriceRange.min, parsed),
   );
-}
-
-function formatLsl(value: number) {
-  return new Intl.NumberFormat("en-LS", {
-    style: "currency",
-    currency: "LSL",
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 function pricePercent(value: number) {

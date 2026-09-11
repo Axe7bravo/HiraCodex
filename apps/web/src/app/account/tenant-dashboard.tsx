@@ -25,6 +25,7 @@ import {
   type UserProfile,
   type VerificationSubmission,
 } from "@/lib/api";
+import { formatMaloti } from "@/lib/format-money";
 
 type TenantProfile = Extract<UserProfile, { role: "TENANT" }>;
 
@@ -107,7 +108,7 @@ export function TenantDashboard({ profile, profileEditor, logout, signingOut }: 
                           <Image fill sizes="(max-width: 720px) 100vw, 28vw" src={`${apiUrl}/discovery/properties/${property.id}/photos/${photo.id}`} alt={`${property.title} listing`} onError={() => setFailedPhotos((current) => [...current, property.id])} />
                         ) : <span><Home aria-hidden="true" /> Image unavailable</span>}
                       </Link>
-                      <div><h3><Link href={`/properties/${property.id}`}>{property.title}</Link></h3><p><MapPin aria-hidden="true" /> {property.area}, {property.city}</p><strong>M {Number(property.monthlyPrice).toLocaleString()} <small>/ month</small></strong></div>
+                      <div><h3><Link href={`/properties/${property.id}`}>{property.title}</Link></h3><p><MapPin aria-hidden="true" /> {property.area}, {property.city}</p><strong>{formatMaloti(property.monthlyPrice)} <small>/ month</small></strong></div>
                     </article>
                   );
                 })}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest, apiUrl, type FavouriteItem } from "@/lib/api";
 import { TenantEmpty } from "@/components/tenant-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function SavedProperties() {
   const [items, setItems] = useState<FavouriteItem[]>([]);
@@ -71,7 +72,7 @@ export function SavedProperties() {
                   </Link>
                 </h2>
                 <p className="card-price">
-                  M {Number(property.monthlyPrice).toLocaleString()} / month
+                  {formatMaloti(property.monthlyPrice)} / month
                 </p>
                 <p>
                   {property.roomType} · {property.area}

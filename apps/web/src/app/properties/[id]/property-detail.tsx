@@ -30,6 +30,7 @@ import {
   type PublicPropertyDetail,
 } from "@/lib/api";
 import { trackAnalytics } from "@/lib/analytics";
+import { formatMaloti } from "@/lib/format-money";
 
 type Viewer = "loading" | "guest" | "tenant" | "other";
 
@@ -154,9 +155,7 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
       </div>
     );
 
-  const formattedPrice = new Intl.NumberFormat("en-LS", {
-    maximumFractionDigits: 2,
-  }).format(Number(property.monthlyPrice));
+  const formattedPrice = formatMaloti(property.monthlyPrice);
   const formattedAvailability = new Date(
     property.availableFrom,
   ).toLocaleDateString("en-LS", {
@@ -257,7 +256,7 @@ export function PropertyDetail({ propertyId }: { propertyId: string }) {
         <aside className="detail-actions">
           <section className="detail-action-card">
             <div className="detail-action-price">
-              <strong>M{formattedPrice}</strong>
+              <strong>{formattedPrice}</strong>
               <span>/ month</span>
             </div>
             <p className="detail-action-note">

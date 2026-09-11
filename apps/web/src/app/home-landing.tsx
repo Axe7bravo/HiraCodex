@@ -22,6 +22,7 @@ import {
   type DiscoveryPage,
   type DiscoveryProperty,
 } from "@/lib/api";
+import { formatMaloti } from "@/lib/format-money";
 import {
   discoveryAmenities,
   discoveryAreas,
@@ -176,7 +177,7 @@ export function HomeLanding() {
 function LandingPropertyCard({ property }: { property: DiscoveryProperty }) {
   const [imageFailed, setImageFailed] = useState(false);
   const photo = property.photos[0];
-  const price = new Intl.NumberFormat("en-LS", { style: "currency", currency: "LSL", maximumFractionDigits: 0 }).format(Number(property.monthlyPrice));
+  const price = formatMaloti(property.monthlyPrice);
   return (
     <article className="marketplace-card landing-property-card">
       <Link className="marketplace-card-image" href={`/properties/${property.id}`}>

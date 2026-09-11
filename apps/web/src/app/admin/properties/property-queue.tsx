@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AdminPropertyQueueItem, apiRequest } from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function AdminPropertyQueue() {
   const [items, setItems] = useState<AdminPropertyQueueItem[]>([]);
@@ -43,7 +44,7 @@ export function AdminPropertyQueue() {
               <div>
                 <strong>{item.title}</strong>
                 <span>
-                  {item.area}, {item.city} · M{item.monthlyPrice}/month
+                  {item.area}, {item.city} · {formatMaloti(item.monthlyPrice)}/month
                 </span>
                 <AdminStatus status="PENDING_REVIEW" />
                 <small>

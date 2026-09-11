@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { TenantShell, TenantStatus } from "@/components/tenant-shell";
 import { LandlordShell, LandlordStatus } from "@/components/landlord-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function RequestList() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -177,7 +178,7 @@ function RequestCard({
         </h2>
         <p>
           {request.property.area}, {request.property.city} ·{" "}
-          {request.property.roomType} · M {Number(request.property.monthlyPrice).toLocaleString()} / month
+          {request.property.roomType} · {formatMaloti(request.property.monthlyPrice)} / month
         </p>
       </div>
       <p>

@@ -5,6 +5,7 @@ import type { FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useState } from "react";
 import { apiRequest, LandlordProperty } from "@/lib/api";
 import { apiUrl } from "@/lib/api";
+import { formatMaloti } from "@/lib/format-money";
 import { LandlordStatus } from "@/components/landlord-shell";
 import {
   discoveryAmenities,
@@ -149,7 +150,7 @@ export function PropertyForm({ propertyId }: { propertyId?: string }) {
           <h1>{property ? property.title : propertyId ? "Manage property" : "Create a property"}</h1>
           <p>
             {property
-              ? `${property.area}, ${property.city} · M ${Number(property.monthlyPrice).toLocaleString()} / month`
+              ? `${property.area}, ${property.city} · ${formatMaloti(property.monthlyPrice)} / month`
               : "Add the listing details, then save your draft before uploading photos."}
           </p>
         </div>
@@ -267,7 +268,7 @@ export function PropertyForm({ propertyId }: { propertyId?: string }) {
               </label>
               <div className="field-row">
               <PropertyInput
-                label="Monthly price (LSL)"
+                label="Monthly price (M)"
                 value={form.monthlyPrice}
                 onChange={(value) => field("monthlyPrice", value)}
                 inputMode="decimal"

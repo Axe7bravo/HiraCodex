@@ -10,6 +10,7 @@ import {
   getCurrentUser,
 } from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function AdminPropertyReview({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminPropertyDetail | null>(null);
@@ -87,7 +88,7 @@ export function AdminPropertyReview({ id }: { id: string }) {
         <p className="eyebrow">Property review</p>
         <h1>{detail.title}</h1>
         <p>
-          {detail.area}, {detail.city} · M{detail.monthlyPrice}/month ·{" "}
+          {detail.area}, {detail.city} · {formatMaloti(detail.monthlyPrice)}/month ·{" "}
           {detail.roomType}
         </p>
         </div>

@@ -21,7 +21,9 @@ import { AdminVerificationsService } from './admin-verifications.service';
       provide: VERIFICATION_DOCUMENT_STORAGE,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        if (config.get<string>('VERIFICATION_STORAGE_DRIVER') === 's3') {
+        const driver =
+          config.get<string>('VERIFICATION_STORAGE_DRIVER') ?? 'local';
+        if (driver === 's3') {
           return new S3VerificationDocumentStorage(
             new S3Client({
               endpoint: config.get<string>('VERIFICATION_S3_ENDPOINT'),
@@ -36,6 +38,17 @@ import { AdminVerificationsService } from './admin-verifications.service';
               },
             }),
             config.getOrThrow<string>('VERIFICATION_S3_BUCKET'),
+          );
+        }
+
+        if (driver !== 'local') {
+          throw new Error(
+            'VERIFICATION_STORAGE_DRIVER must be either local or s3',
+          );
+        }
+        if (config.get<string>('NODE_ENV') === 'production') {
+          throw new Error(
+            'VERIFICATION_STORAGE_DRIVER must be s3 in production',
           );
         }
 

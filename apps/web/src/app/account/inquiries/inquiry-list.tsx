@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { apiRequest, getCurrentUser, type Inquiry, type UserProfile } from "@/lib/api";
 import { TenantEmpty, TenantShell, TenantStatus } from "@/components/tenant-shell";
 import { LandlordShell, LandlordStatus } from "@/components/landlord-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function InquiryList() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -91,7 +92,7 @@ export function InquiryList() {
                 </h2>
                 <p>
                   {inquiry.property.area}, {inquiry.property.city} ·{" "}
-                  {inquiry.property.roomType} · M {Number(inquiry.property.monthlyPrice).toLocaleString()} / month
+                  {inquiry.property.roomType} · {formatMaloti(inquiry.property.monthlyPrice)} / month
                 </p>
               </div>
               <p>{inquiry.message}</p>

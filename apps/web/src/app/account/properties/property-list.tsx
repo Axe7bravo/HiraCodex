@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiRequest, apiUrl, LandlordProperty } from "@/lib/api";
 import { LandlordStatus } from "@/components/landlord-shell";
+import { formatMaloti } from "@/lib/format-money";
 
 export function PropertyList() {
   const [properties, setProperties] = useState<LandlordProperty[]>([]);
@@ -112,7 +113,7 @@ export function PropertyList() {
                 <LandlordStatus status={property.status} />
                 <h2>{property.title}</h2>
                 <p>
-                  {property.area}, {property.city} · M{property.monthlyPrice}
+                  {property.area}, {property.city} · {formatMaloti(property.monthlyPrice)}
                   /month
                 </p>
                 <small>

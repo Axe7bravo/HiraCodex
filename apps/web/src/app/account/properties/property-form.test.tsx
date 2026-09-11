@@ -22,7 +22,7 @@ describe("PropertyForm", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "A quiet furnished room close to campus." },
     });
-    fill("Monthly price (LSL)", "1450.50");
+    fill("Monthly price (M)", "1450.50");
     select("Room / property type", "Private room");
     fireEvent.change(screen.getByLabelText("Available from"), {
       target: { value: "2026-09-15" },
@@ -222,7 +222,7 @@ describe("PropertyForm", () => {
       .mockResolvedValueOnce(response([listing]))
       .mockResolvedValueOnce(errorResponse("monthlyPrice must be positive"));
     render(<PropertyForm propertyId="property-1" />);
-    fill(await screen.findByLabelText("Monthly price (LSL)"), "0");
+    fill(await screen.findByLabelText("Monthly price (M)"), "0");
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("monthlyPrice must be positive");
     expect(screen.queryByText("Changes saved.")).not.toBeInTheDocument();

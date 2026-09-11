@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiUrl } from "@/lib/api";
 
 type HealthResponse = { status: "ok"; api: "running"; database: "reachable" };
 type RequestState =
   | { kind: "loading" }
   | { kind: "success"; health: HealthResponse }
   | { kind: "failure"; message: string };
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
 export function ApiStatus() {
   const [requestState, setRequestState] = useState<RequestState>({
     kind: "loading",

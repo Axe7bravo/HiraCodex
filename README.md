@@ -53,4 +53,5 @@ pnpm build
 - Design: `docs/design/design.md`
 - Visual manifest: `docs/design/SCREEN_MANIFEST.md`
 - Build order: `docs/implementation/BUILD_ORDER.md`
+- Production deployment: `docs/implementation/PRODUCTION_DEPLOYMENT.md`
 - Persistent repository instructions: `AGENTS.md`
