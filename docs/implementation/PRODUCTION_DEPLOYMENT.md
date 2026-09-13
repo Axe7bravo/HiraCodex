@@ -1,5 +1,8 @@
 # Hira V1 production deployment
 
+For the selected Cloud Run API / Neon / Firebase App Hosting topology, see
+[Cloud Run preparation](CLOUD_RUN.md). The portable requirements below still apply.
+
 This runbook describes repository requirements only. It does not provision or
 select hosting, PostgreSQL, object storage, email, analytics, monitoring, or
 backup providers.

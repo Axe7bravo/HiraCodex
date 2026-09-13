@@ -14,14 +14,32 @@ describe('AnalyticsService', () => {
   });
 
   it('is a no-op without provider configuration', () => {
-    const service = new AnalyticsService(new ConfigService());
+    const previousApiKey = process.env.POSTHOG_API_KEY;
+    const previousHost = process.env.POSTHOG_HOST;
+    delete process.env.POSTHOG_API_KEY;
+    delete process.env.POSTHOG_HOST;
 
-    service.capture('registration_completed', 'user-1', {
-      userId: 'user-1',
-      role: UserRole.TENANT,
-    });
+    try {
+      const service = new AnalyticsService(new ConfigService());
 
-    expect(fetchMock).not.toHaveBeenCalled();
+      service.capture('registration_completed', 'user-1', {
+        userId: 'user-1',
+        role: UserRole.TENANT,
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.POSTHOG_API_KEY;
+      } else {
+        process.env.POSTHOG_API_KEY = previousApiKey;
+      }
+      if (previousHost === undefined) {
+        delete process.env.POSTHOG_HOST;
+      } else {
+        process.env.POSTHOG_HOST = previousHost;
+      }
+    }
   });
 
   it('sends only the explicit event properties', async () => {
