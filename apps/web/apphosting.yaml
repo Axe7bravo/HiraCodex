@@ -1,0 +1,5 @@
+# Custom build opts out of Firebase's Next.js framework adapter.
+# Commands run from the configured app root: apps/web.
+scripts:
+  buildCommand: pnpm run build
+  runCommand: pnpm run start --hostname 0.0.0.0
