@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   PropertyStatus,
@@ -15,6 +15,7 @@ import { EmailService } from '../src/auth/email.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PROPERTY_PHOTO_STORAGE } from '../src/properties/property-photo-storage';
 import { AdminPropertiesService } from '../src/properties/admin-properties.service';
+import { PropertiesService } from '../src/properties/properties.service';
 import { VERIFICATION_DOCUMENT_STORAGE } from '../src/verifications/verification-document-storage';
 
 process.env.JWT_SECRET ??=
@@ -72,6 +73,9 @@ describe('Landlord property management (e2e)', () => {
     await prisma.inquiry.deleteMany({
       where: { tenant: { email: { startsWith: `property-${runId}-` } } },
     });
+    await prisma.accommodationRequest.deleteMany({
+      where: { tenant: { email: { startsWith: `property-${runId}-` } } },
+    });
     await prisma.property.deleteMany({
       where: { landlord: { email: { startsWith: `property-${runId}-` } } },
     });
@@ -79,6 +83,50 @@ describe('Landlord property management (e2e)', () => {
       where: { email: { startsWith: `property-${runId}-` } },
     });
     await app.close();
+  });
+
+  it('allows deletion during a pending upload and cleans the object without metadata', async () => {
+    const owner = await authenticatedAgent('upload-delete-race', UserRole.LANDLORD);
+    const created = await owner.post('/properties')
+      .send(validProperty('Upload and deletion race')).expect(201);
+    const property = getBody<PropertyBody>(created);
+    let releaseUpload: () => void = () => undefined;
+    let reportStored: () => void = () => undefined;
+    let uploadedKey = '';
+    const upload = new Promise<void>((resolve) => {
+      releaseUpload = resolve;
+    });
+    const stored = new Promise<void>((resolve) => {
+      reportStored = resolve;
+    });
+    propertyStorage.put.mockImplementationOnce(async (key, contents) => {
+      uploadedKey = key;
+      storedPhotos.set(key, contents);
+      reportStored();
+      await upload;
+    });
+    const contents = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
+    // Observe rejection immediately so a failed race never becomes unhandled.
+    const addition = app.get(PropertiesService).addPhoto(property.id, property.landlordId, {
+      buffer: contents,
+      size: contents.length,
+      mimetype: 'image/jpeg',
+      originalname: 'room.jpg',
+    }).then(() => null, (error: unknown) => error);
+    try {
+      await stored;
+      // This must complete before upload is released: storage cannot hold a DB lock.
+      await owner.delete(`/properties/${property.id}`).expect(204);
+    } finally {
+      releaseUpload();
+      await addition;
+    }
+    expect(await addition).toBeInstanceOf(NotFoundException);
+    expect(await prisma.propertyPhoto.count({ where: { propertyId: property.id } })).toBe(0);
+    expect(propertyStorage.delete).toHaveBeenCalledWith(uploadedKey);
+    expect(storedPhotos.has(uploadedKey)).toBe(false);
+    const retained = await prisma.property.findUniqueOrThrow({ where: { id: property.id } });
+    expect(retained.deletedAt).toBeInstanceOf(Date);
   });
 
   it('authorizes admin moderation and resolves concurrent review once', async () => {
@@ -569,17 +617,18 @@ describe('Landlord property management (e2e)', () => {
       .expect(400);
   });
 
-  it('deletes an untouched property but preserves interaction history', async () => {
+  it('soft deletes ACTIVE listings while preserving interaction and audit history', async () => {
     const owner = await authenticatedAgent('delete-owner', UserRole.LANDLORD);
     const clean = await owner
       .post('/properties')
       .send(validProperty('Clean property'))
       .expect(201);
     const cleanBody = getBody<PropertyBody>(clean);
-    await owner.delete(`/properties/${cleanBody.id}`).expect(200);
-    expect(
-      await prisma.property.findUnique({ where: { id: cleanBody.id } }),
-    ).toBeNull();
+    await owner.delete(`/properties/${cleanBody.id}`).expect(204);
+    const deleted = await prisma.property.findUniqueOrThrow({
+      where: { id: cleanBody.id },
+    });
+    expect(deleted.deletedAt).toBeInstanceOf(Date);
 
     const historic = await owner
       .post('/properties')
@@ -603,13 +652,144 @@ describe('Landlord property management (e2e)', () => {
         message: 'Please preserve this interaction.',
       },
     });
-    await owner.delete(`/properties/${historicBody.id}`).expect(409);
+    const accommodation = await prisma.accommodationRequest.create({
+      data: {
+        propertyId: historicBody.id,
+        tenantId: tenant.id,
+        landlordId: historicBody.landlordId,
+        preferredMoveInDate: new Date('2026-10-01T00:00:00.000Z'),
+      },
+    });
+    const audit = await prisma.auditLog.create({
+      data: {
+        actorId: historicBody.landlordId,
+        action: 'PROPERTY_APPROVED',
+        targetType: 'Property',
+        targetId: historicBody.id,
+      },
+    });
+    const uploaded = await owner
+      .post(`/properties/${historicBody.id}/photos`)
+      .attach('photo', Buffer.from([0xff, 0xd8, 0xff, 0x00]), 'room.jpg')
+      .expect(201);
+    const photoId = getBody<{ id: string }>(uploaded).id;
+    await prisma.property.update({
+      where: { id: historicBody.id },
+      data: { status: PropertyStatus.ACTIVE },
+    });
+    await request(app.getHttpServer())
+      .get(`/discovery/properties/${historicBody.id}`)
+      .expect(200);
+    const stranger = await authenticatedAgent(
+      'delete-stranger',
+      UserRole.LANDLORD,
+    );
+    const admin = await authenticatedAdminAgent('delete-admin');
+    await stranger.delete(`/properties/${historicBody.id}`).expect(404);
+    await admin.delete(`/properties/${historicBody.id}`).expect(404);
+    await owner.delete(`/properties/${historicBody.id}`).expect(204);
+    const removed = await prisma.property.findUniqueOrThrow({
+      where: { id: historicBody.id },
+    });
+    expect(removed.deletedAt).toBeInstanceOf(Date);
+    expect(removed.status).toBe(PropertyStatus.ACTIVE);
+    const mine = await owner.get('/properties/mine').expect(200);
+    expect(getBody<PropertyBody[]>(mine).map(({ id }) => id)).not.toContain(
+      historicBody.id,
+    );
+    const discovered = await request(app.getHttpServer())
+      .get('/discovery/properties')
+      .query({ area: 'Roma' })
+      .expect(200);
+    expect(
+      getBody<{ items: PropertyBody[] }>(discovered).items.map(({ id }) => id),
+    ).not.toContain(historicBody.id);
+    await request(app.getHttpServer())
+      .get(`/discovery/properties/${historicBody.id}`)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/discovery/properties/${historicBody.id}/photos/${photoId}`)
+      .expect(404);
+    await owner
+      .get(`/properties/${historicBody.id}/photos/${photoId}`)
+      .expect(404);
+    await owner
+      .patch(`/properties/${historicBody.id}`)
+      .send({ title: 'Cannot revive' })
+      .expect(404);
+    await owner
+      .post(`/properties/${historicBody.id}/submit-review`)
+      .expect(404);
+    await admin
+      .patch(`/admin/properties/${historicBody.id}`)
+      .send({ status: 'ACTIVE' })
+      .expect(404);
+    await owner.delete(`/properties/${historicBody.id}`).expect(404);
+    const visitor = await authenticatedAgent(
+      'deleted-property-visitor',
+      UserRole.TENANT,
+    );
+    await visitor.post(`/favourites/${historicBody.id}`).expect(404);
+    await visitor
+      .post(`/properties/${historicBody.id}/inquiries`)
+      .send({ message: 'Is this room available?' })
+      .expect(404);
+    await visitor
+      .post(`/properties/${historicBody.id}/requests`)
+      .send({ preferredMoveInDate: '2026-10-01' })
+      .expect(404);
+    const inbox = await owner.get('/inquiries').expect(200);
+    expect(getBody<Array<{ id: string }>>(inbox).map(({ id }) => id)).toContain(
+      inquiry.id,
+    );
+    const requests = await owner.get('/requests').expect(200);
+    expect(
+      getBody<Array<{ id: string }>>(requests).map(({ id }) => id),
+    ).toContain(accommodation.id);
+    expect(
+      await prisma.propertyPhoto.findUnique({ where: { id: photoId } }),
+    ).not.toBeNull();
+    expect(
+      await prisma.accommodationRequest.findUnique({
+        where: { id: accommodation.id },
+      }),
+    ).not.toBeNull();
+    expect(
+      await prisma.auditLog.findUnique({ where: { id: audit.id } }),
+    ).not.toBeNull();
     expect(
       await prisma.inquiry.findUnique({ where: { id: inquiry.id } }),
     ).not.toBeNull();
   });
 
-  it('privately manages photos and locks the listing after review submission', async () => {
+  it.each([UserRole.LANDLORD, UserRole.ADMIN])(
+    'allows a %s owner to delete in every status',
+    async (role) => {
+      const owner =
+        role === UserRole.ADMIN
+          ? await authenticatedAdminAgent('all-status-admin')
+          : await authenticatedAgent('all-status-landlord', role);
+      for (const status of Object.values(PropertyStatus)) {
+        const response = await owner
+          .post('/properties')
+          .send(validProperty(`Remove ${role} ${status}`))
+          .expect(201);
+        const property = getBody<PropertyBody>(response);
+        await prisma.property.update({
+          where: { id: property.id },
+          data: { status },
+        });
+        await owner.delete(`/properties/${property.id}`).expect(204);
+        const retained = await prisma.property.findUniqueOrThrow({
+          where: { id: property.id },
+        });
+        expect(retained.status).toBe(status);
+        expect(retained.deletedAt).toBeInstanceOf(Date);
+      }
+    },
+  );
+
+  it('privately manages photos and locks editing after review submission', async () => {
     const owner = await authenticatedAgent('photo-owner', UserRole.LANDLORD);
     const stranger = await authenticatedAgent(
       'photo-stranger',
@@ -667,7 +847,7 @@ describe('Landlord property management (e2e)', () => {
     await owner
       .delete(`/properties/${propertyId}/photos/${photoIds[0]}`)
       .expect(409);
-    await owner.delete(`/properties/${propertyId}`).expect(409);
+    await owner.delete(`/properties/${propertyId}`).expect(204);
   });
 
   function registration(name: string, role: UserRole) {

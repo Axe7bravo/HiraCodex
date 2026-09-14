@@ -43,6 +43,7 @@ describe('DiscoveryPropertiesService', () => {
 
     expect(property.findMany).toHaveBeenCalledWith({
       where: {
+        deletedAt: null,
         status: PropertyStatus.ACTIVE,
         monthlyPrice: undefined,
         area: undefined,
@@ -100,7 +101,11 @@ describe('DiscoveryPropertiesService', () => {
       },
     });
     expect(findFirstMock).toHaveBeenCalledWith({
-      where: { id: 'property-1', status: PropertyStatus.ACTIVE },
+      where: {
+        id: 'property-1',
+        deletedAt: null,
+        status: PropertyStatus.ACTIVE,
+      },
       select: {
         id: true,
         title: true,
@@ -163,6 +168,7 @@ describe('DiscoveryPropertiesService', () => {
     expect(property.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          deletedAt: null,
           status: PropertyStatus.ACTIVE,
           monthlyPrice: {
             gte: new Prisma.Decimal('800'),
@@ -221,7 +227,7 @@ describe('DiscoveryPropertiesService', () => {
       where: {
         id: 'photo-1',
         propertyId: 'property-1',
-        property: { status: PropertyStatus.ACTIVE },
+        property: { deletedAt: null, status: PropertyStatus.ACTIVE },
       },
       select: { objectKey: true, mimeType: true },
     });

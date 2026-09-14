@@ -49,7 +49,7 @@ export class AdminPropertiesService {
 
   async list() {
     const rows = await this.prisma.property.findMany({
-      where: { status: PropertyStatus.PENDING_REVIEW },
+      where: { deletedAt: null, status: PropertyStatus.PENDING_REVIEW },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
@@ -73,7 +73,7 @@ export class AdminPropertiesService {
 
   async getDetail(id: string) {
     const property = await this.prisma.property.findUnique({
-      where: { id },
+      where: { id, deletedAt: null },
       include: {
         landlord: { select: landlordSelect },
         photos: { select: photoSelect, orderBy: { sortOrder: 'asc' } },
@@ -100,7 +100,7 @@ export class AdminPropertiesService {
 
   async getPhoto(propertyId: string, photoId: string) {
     const photo = await this.prisma.propertyPhoto.findFirst({
-      where: { id: photoId, propertyId },
+      where: { id: photoId, propertyId, property: { deletedAt: null } },
       select: { objectKey: true, mimeType: true },
     });
     if (!photo) throw new NotFoundException('Property photo not found');
@@ -120,7 +120,7 @@ export class AdminPropertiesService {
     this.validateDecision(input);
     const result = await this.prisma.$transaction(async (transaction) => {
       const current = await transaction.property.findUnique({
-        where: { id },
+        where: { id, deletedAt: null },
         select: {
           id: true,
           landlordId: true,
@@ -131,7 +131,7 @@ export class AdminPropertiesService {
       if (!current) throw new NotFoundException('Property not found');
 
       const decided = await transaction.property.updateMany({
-        where: { id, status: PropertyStatus.PENDING_REVIEW },
+        where: { id, deletedAt: null, status: PropertyStatus.PENDING_REVIEW },
         data: {
           status: input.status,
           rejectionReason:

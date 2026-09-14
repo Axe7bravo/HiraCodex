@@ -57,6 +57,7 @@ describe('PropertiesService', () => {
     storage.put.mockResolvedValue(undefined);
     storage.delete.mockResolvedValue(undefined);
     propertyPhoto.findMany.mockResolvedValue([]);
+    property.updateMany.mockResolvedValue({ count: 1 });
     verification.findFirst.mockResolvedValue({ id: 'verification-1' });
   });
 
@@ -64,7 +65,9 @@ describe('PropertiesService', () => {
     property.findMany.mockResolvedValue([]);
     await service.mine('landlord-1');
     expect(property.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { landlordId: 'landlord-1' } }),
+      expect.objectContaining({
+        where: { landlordId: 'landlord-1', deletedAt: null },
+      }),
     );
   });
 
@@ -104,13 +107,14 @@ describe('PropertiesService', () => {
 
     expect(property.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'property-1', landlordId: 'landlord-1' },
+        where: { id: 'property-1', landlordId: 'landlord-1', deletedAt: null },
       }),
     );
     expect(property.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
+        deletedAt: null,
         status: {
           in: [PropertyStatus.DRAFT, PropertyStatus.PAUSED],
         },
@@ -145,6 +149,7 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
+        deletedAt: null,
         status: { in: [PropertyStatus.ACTIVE] },
       },
       data: { status: PropertyStatus.PAUSED },
@@ -205,6 +210,7 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
+        deletedAt: null,
         status: {
           in: [
             PropertyStatus.DRAFT,
@@ -255,6 +261,7 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
+        deletedAt: null,
         status: {
           in: [
             PropertyStatus.DRAFT,
@@ -268,63 +275,40 @@ describe('PropertiesService', () => {
     expect(property.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 
-  it('maps interaction-history delete constraints to a conflict', async () => {
-    property.findFirst.mockResolvedValue({
-      id: 'property-1',
-      status: PropertyStatus.PAUSED,
+  it('soft deletes without a status restriction or removing history and photos', async () => {
+    property.updateMany.mockResolvedValue({ count: 1 });
+    await service.remove('property-1', 'landlord-1');
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: { id: 'property-1', landlordId: 'landlord-1', deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
     });
-    property.deleteMany.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('constraint', {
-        code: 'P2003',
-        clientVersion: '6.19.1',
-      }),
-    );
-    propertyPhoto.findMany.mockResolvedValue([{ objectKey: 'properties/a' }]);
-
-    await expect(
-      service.remove('property-1', 'landlord-1'),
-    ).rejects.toBeInstanceOf(ConflictException);
+    expect(property.findFirst).not.toHaveBeenCalled();
+    expect(property.deleteMany).not.toHaveBeenCalled();
+    expect(propertyPhoto.deleteMany).not.toHaveBeenCalled();
     expect(storage.delete).not.toHaveBeenCalled();
   });
 
-  it('cleans stored photo objects after a property is deleted', async () => {
-    property.findFirst.mockResolvedValue({
-      id: 'property-1',
-      status: PropertyStatus.DRAFT,
+  it('does not reveal a non-owned, missing, or already deleted property', async () => {
+    property.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      service.remove('property-1', 'landlord-2'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: { id: 'property-1', landlordId: 'landlord-2', deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
     });
-    propertyPhoto.findMany.mockResolvedValue([
-      { objectKey: 'properties/one' },
-      { objectKey: 'properties/two' },
-    ]);
-    property.deleteMany.mockResolvedValue({ count: 1 });
-    await service.remove('property-1', 'landlord-1');
-    expect(storage.delete).toHaveBeenCalledTimes(2);
+    expect(storage.delete).not.toHaveBeenCalled();
   });
 
-  it('does not delete when submission wins after the preliminary read', async () => {
+  it('rejects an edit when soft deletion wins after the initial read', async () => {
     property.findFirst
       .mockResolvedValueOnce({ id: 'property-1', status: PropertyStatus.DRAFT })
-      .mockResolvedValueOnce({ status: PropertyStatus.PENDING_REVIEW });
-    propertyPhoto.findMany.mockResolvedValue([{ objectKey: 'properties/one' }]);
-    property.deleteMany.mockResolvedValue({ count: 0 });
-
+      .mockResolvedValueOnce(null);
+    property.updateMany.mockResolvedValue({ count: 0 });
     await expect(
-      service.remove('property-1', 'landlord-1'),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(property.deleteMany).toHaveBeenCalledWith({
-      where: {
-        id: 'property-1',
-        landlordId: 'landlord-1',
-        status: {
-          in: [
-            PropertyStatus.DRAFT,
-            PropertyStatus.PAUSED,
-            PropertyStatus.REJECTED,
-          ],
-        },
-      },
-    });
-    expect(storage.delete).not.toHaveBeenCalled();
+      service.update('property-1', 'landlord-1', { title: 'Stale edit' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(property.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 
   it('does not delete a photo when submission wins after the preliminary read', async () => {
@@ -343,6 +327,7 @@ describe('PropertiesService', () => {
         propertyId: 'property-1',
         property: {
           landlordId: 'landlord-1',
+          deletedAt: null,
           status: {
             in: [
               PropertyStatus.DRAFT,
@@ -353,6 +338,112 @@ describe('PropertiesService', () => {
         },
       },
     });
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+  it('does not open a database transaction while the storage upload is pending', async () => {
+    property.findFirst.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.DRAFT,
+    });
+    propertyPhoto.count.mockResolvedValue(0);
+    propertyPhoto.create.mockResolvedValue({ id: 'photo-1' });
+    let releaseUpload: () => void = () => undefined;
+    let reportStarted: () => void = () => undefined;
+    const upload = new Promise<void>((resolve) => {
+      releaseUpload = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      reportStarted = resolve;
+    });
+    storage.put.mockImplementationOnce(() => {
+      reportStarted();
+      return upload;
+    });
+
+    const addition = service.addPhoto('property-1', 'landlord-1', photo());
+    try {
+      await started;
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(property.updateMany).not.toHaveBeenCalled();
+      expect(propertyPhoto.create).not.toHaveBeenCalled();
+    } finally {
+      releaseUpload();
+      await addition;
+    }
+    await expect(addition).resolves.toEqual({ id: 'photo-1' });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+  it('cleans up outside the transaction if the post-upload commit fails', async () => {
+    property.findFirst.mockResolvedValue({
+      id: 'property-1',
+      status: PropertyStatus.DRAFT,
+    });
+    propertyPhoto.count.mockResolvedValue(0);
+    propertyPhoto.create.mockResolvedValue({ id: 'photo-1' });
+    const failure = new Error('commit failed');
+    let transactionOpen = false;
+    let cleanupDuringTransaction = false;
+    prisma.$transaction.mockImplementationOnce(async (callback) => {
+      transactionOpen = true;
+      try {
+        await callback(transactionClient);
+        throw failure;
+      } finally {
+        transactionOpen = false;
+      }
+    });
+    storage.delete.mockImplementationOnce(() => {
+      cleanupDuringTransaction = transactionOpen;
+      return Promise.resolve();
+    });
+
+    await expect(
+      service.addPhoto('property-1', 'landlord-1', photo()),
+    ).rejects.toBe(failure);
+    expect(propertyPhoto.create).toHaveBeenCalledTimes(1);
+    expect(storage.delete).toHaveBeenCalledTimes(1);
+    expect(cleanupDuringTransaction).toBe(false);
+  });
+
+  it('cleans an uploaded object if deletion wins before photo persistence', async () => {
+    property.findFirst
+      .mockResolvedValueOnce({ id: 'property-1', status: PropertyStatus.DRAFT })
+      .mockResolvedValueOnce(null);
+    property.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      service.addPhoto('property-1', 'landlord-1', photo()),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(property.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'property-1',
+        landlordId: 'landlord-1',
+        deletedAt: null,
+        status: {
+          in: [
+            PropertyStatus.DRAFT,
+            PropertyStatus.PAUSED,
+            PropertyStatus.REJECTED,
+          ],
+        },
+      },
+      data: { updatedAt: expect.any(Date) },
+    });
+    expect(propertyPhoto.create).not.toHaveBeenCalled();
+    expect(storage.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete a photo after its parent is soft deleted', async () => {
+    property.findFirst
+      .mockResolvedValueOnce({ id: 'property-1', status: PropertyStatus.DRAFT })
+      .mockResolvedValueOnce(null);
+    property.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      service.deletePhoto('property-1', 'photo-1', 'landlord-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(propertyPhoto.deleteMany).not.toHaveBeenCalled();
     expect(storage.delete).not.toHaveBeenCalled();
   });
 
@@ -438,6 +529,7 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'landlord-1',
+        deletedAt: null,
         status: {
           in: [
             PropertyStatus.DRAFT,
@@ -487,6 +579,7 @@ describe('PropertiesService', () => {
       where: {
         id: 'property-1',
         landlordId: 'admin-1',
+        deletedAt: null,
         status: {
           in: [
             PropertyStatus.DRAFT,

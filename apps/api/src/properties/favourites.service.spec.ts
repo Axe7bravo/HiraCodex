@@ -21,7 +21,7 @@ describe('FavouritesService', () => {
       expect.objectContaining({
         where: {
           tenantId: 'tenant-1',
-          property: { status: PropertyStatus.ACTIVE },
+          property: { deletedAt: null, status: PropertyStatus.ACTIVE },
         },
       }),
     );
@@ -32,7 +32,11 @@ describe('FavouritesService', () => {
     favourite.findFirst.mockResolvedValue({
       propertyId: 'property-1',
       createdAt: new Date(),
-      property: { id: 'property-1', status: PropertyStatus.ACTIVE },
+      property: {
+        id: 'property-1',
+        deletedAt: null,
+        status: PropertyStatus.ACTIVE,
+      },
     });
 
     await expect(service.save('tenant-1', 'property-1')).resolves.toMatchObject(
@@ -46,7 +50,7 @@ describe('FavouritesService', () => {
         where: {
           tenantId: 'tenant-1',
           propertyId: 'property-1',
-          property: { status: PropertyStatus.ACTIVE },
+          property: { deletedAt: null, status: PropertyStatus.ACTIVE },
         },
       }),
     );

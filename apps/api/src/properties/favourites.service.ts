@@ -8,7 +8,7 @@ const activeFavouriteWhere = (
   tenantId: string,
 ): Prisma.FavouriteWhereInput => ({
   tenantId,
-  property: { status: PropertyStatus.ACTIVE },
+  property: { deletedAt: null, status: PropertyStatus.ACTIVE },
 });
 
 const favouriteSelect = {
@@ -34,10 +34,14 @@ export class FavouritesService {
 
   async save(tenantId: string, propertyId: string) {
     const inserted = await this.prisma.$executeRaw`
+      WITH eligible AS MATERIALIZED (
+        SELECT "id" FROM "Property"
+        WHERE "id" = ${propertyId} AND "status" = 'ACTIVE' AND "deletedAt" IS NULL
+        FOR SHARE
+      )
       INSERT INTO "Favourite" ("tenantId", "propertyId", "createdAt")
       SELECT ${tenantId}, "id", NOW()
-      FROM "Property"
-      WHERE "id" = ${propertyId} AND "status" = 'ACTIVE'
+      FROM eligible
       ON CONFLICT ("tenantId", "propertyId") DO NOTHING
     `;
 

@@ -50,7 +50,7 @@ export function PropertyList() {
   }
 
   async function remove(property: LandlordProperty) {
-    if (!window.confirm(`Delete “${property.title}”? This cannot be undone.`)) {
+    if (!window.confirm(`Delete “${property.title}”? It will disappear from your dashboard and the marketplace. Previous inquiries and requests will be kept. This cannot be undone.`)) {
       return;
     }
     setBusyId(property.id);
@@ -149,15 +149,13 @@ export function PropertyList() {
                     {property.status === "PAUSED" ? "Return to draft" : "Pause"}
                   </button>
                 )}
-                {isEditable(property.status) && (
                   <button
                     className="button button-danger button-small"
-                    disabled={busyId === property.id}
+                    disabled={Boolean(busyId)}
                     onClick={() => void remove(property)}
                   >
-                    Delete
+                    {busyId === property.id ? "Please wait…" : "Delete property"}
                   </button>
-                )}
               </div>
             </li>
           ))}

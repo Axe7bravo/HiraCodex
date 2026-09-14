@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { apiUrl } from "@/lib/api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AccountClient } from "./account-client";
 
@@ -63,7 +64,7 @@ describe("AccountClient", () => {
       "Profile saved successfully",
     );
     const [url, options] = fetchMock.mock.calls[5];
-    expect(url).toBe("/api/users/me");
+    expect(url).toBe(`${apiUrl}/users/me`);
     expect(options.method).toBe("PATCH");
     expect(JSON.parse(options.body)).toMatchObject({
       firstName: "Mpho",

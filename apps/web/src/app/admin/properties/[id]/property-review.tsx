@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { AdminStatus } from "@/components/admin-shell";
 import { formatMaloti } from "@/lib/format-money";
+import { buttonVariants } from "@/components/ui/button";
 
 export function AdminPropertyReview({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminPropertyDetail | null>(null);
@@ -183,7 +184,7 @@ export function AdminPropertyReview({ id }: { id: string }) {
           </form>
         </div>
       )}
-      <Link href="/admin/properties">Back to property queue</Link>
+      <Link className={buttonVariants({ variant: "outline", className: "self-start" })} href="/admin/properties">Back to property queue</Link>
     </section>
   );
 }

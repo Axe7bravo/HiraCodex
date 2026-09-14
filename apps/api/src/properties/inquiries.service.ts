@@ -80,6 +80,7 @@ export class InquiriesService {
         INNER JOIN "User" AS landlord ON landlord."id" = property."landlordId"
         WHERE property."id" = ${propertyId}
           AND property."status" = ${PropertyStatus.ACTIVE}::"PropertyStatus"
+          AND property."deletedAt" IS NULL
         FOR SHARE OF property
       `;
       if (!property) throw new NotFoundException('Property not found');

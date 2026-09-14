@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { apiUrl } from "@/lib/api";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { trackAnalytics } from "@/lib/analytics";
 import { PropertyDiscovery } from "./property-discovery";
@@ -46,11 +47,18 @@ describe("PropertyDiscovery", () => {
       "src",
       expect.stringContaining(
         encodeURIComponent(
-          "/api/discovery/properties/property-1/photos/photo-1",
+          `${apiUrl}/discovery/properties/property-1/photos/photo-1`,
         ),
       ),
     );
-    expect(image.getAttribute("src")).not.toContain("localhost:4000");
+    const optimizedImage = new URL(
+      image.getAttribute("src") ?? "",
+      window.location.origin,
+    );
+    expect(optimizedImage.pathname).toBe("/_next/image");
+    expect(optimizedImage.searchParams.get("url")).toBe(
+      `${apiUrl}/discovery/properties/property-1/photos/photo-1`,
+    );
     expect(screen.getAllByText("Wi-Fi")).toHaveLength(2);
     expect(screen.queryByText("Hira approved")).not.toBeInTheDocument();
     expect(trackAnalyticsMock).toHaveBeenCalledWith("property_search", {

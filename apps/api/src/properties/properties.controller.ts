@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -57,6 +58,7 @@ export class PropertiesController {
   }
 
   @Delete(':id')
+  @HttpCode(204)
   remove(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.properties.remove(id, request.user.id);
   }

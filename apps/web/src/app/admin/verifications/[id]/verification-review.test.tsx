@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { apiUrl } from "@/lib/api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AdminVerificationReview } from "./verification-review";
 
@@ -40,7 +41,7 @@ describe("AdminVerificationReview", () => {
       "blob:verification-document",
     );
     expect(screen.getByLabelText("Preview of student.pdf")).toHaveAttribute("data", "blob:verification-document");
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/verifications/verification-1/documents/document-1", { credentials: "include" });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${apiUrl}/admin/verifications/verification-1/documents/document-1`, { credentials: "include" });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(await screen.findByText("APPROVED")).toBeInTheDocument();
     expect(
@@ -56,7 +57,7 @@ describe("AdminVerificationReview", () => {
     const { unmount } = render(<AdminVerificationReview id="verification-1" />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Document preview could not be loaded.");
-    expect(screen.getByRole("link", { name: "Open securely instead" })).toHaveAttribute("href", "/api/admin/verifications/verification-1/documents/document-1");
+    expect(screen.getByRole("link", { name: "Open securely instead" })).toHaveAttribute("href", `${apiUrl}/admin/verifications/verification-1/documents/document-1`);
 
     fetchMock.mockReset();
     fetchMock.mockResolvedValueOnce(response(detail)).mockResolvedValueOnce(fileResponse("application/pdf"));

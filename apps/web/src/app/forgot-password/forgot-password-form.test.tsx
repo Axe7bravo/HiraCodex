@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { apiUrl } from "@/lib/api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
@@ -32,7 +33,7 @@ describe("ForgotPasswordForm", () => {
       "If an account exists for that email",
     );
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/auth/forgot-password");
+    expect(url).toBe(`${apiUrl}/auth/forgot-password`);
     expect(JSON.parse(options.body)).toEqual({ email: "student@example.com" });
   });
 

@@ -30,6 +30,8 @@ describe("AdminPropertyReview", () => {
       await screen.findByRole("button", { name: "Approve and activate" }),
     );
     await waitFor(() => expect(screen.getByText("ACTIVE")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Back to property queue" })).toHaveAttribute("href", "/admin/properties");
+    expect(screen.getByRole("link", { name: "Back to property queue" })).toHaveClass("border-input");
     expect(fetchMock.mock.calls[2][1]).toMatchObject({
       method: "PATCH",
       body: JSON.stringify({ status: "ACTIVE" }),
@@ -62,6 +64,8 @@ describe("AdminPropertyReview", () => {
       status: "REJECTED",
       rejectionReason: "Add clearer photos.",
     });
+    expect(screen.getByRole("link", { name: "Back to property queue" })).toHaveAttribute("href", "/admin/properties");
+    expect(screen.getByRole("link", { name: "Back to property queue" })).toHaveClass("border-input");
   });
 
   it("warns an admin reviewing their own pending listing", async () => {

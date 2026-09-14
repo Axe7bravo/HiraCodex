@@ -72,7 +72,7 @@ export class PropertiesService {
 
   mine(landlordId: string) {
     return this.prisma.property.findMany({
-      where: { landlordId },
+      where: { landlordId, deletedAt: null },
       include: {
         photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
       },
@@ -106,7 +106,7 @@ export class PropertiesService {
       throw new BadRequestException('At least one property field is required');
     }
     const property = await this.prisma.property.findFirst({
-      where: { id, landlordId },
+      where: { id, landlordId, deletedAt: null },
       select: { id: true, status: true },
     });
     if (!property) throw new NotFoundException('Property not found');
@@ -137,6 +137,7 @@ export class PropertiesService {
       where: {
         id,
         landlordId,
+        deletedAt: null,
         status: { in: mutationStatuses },
       },
       data: this.propertyData(input),
@@ -145,7 +146,7 @@ export class PropertiesService {
       await this.throwPropertyMutationFailure(this.prisma, id, landlordId);
     }
     return this.prisma.property.findUniqueOrThrow({
-      where: { id },
+      where: { id, deletedAt: null },
       include: {
         photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
       },
@@ -153,57 +154,13 @@ export class PropertiesService {
   }
 
   async remove(id: string, landlordId: string): Promise<void> {
-    await this.requireManageableProperty(id, landlordId);
-    let objectKeys: string[];
-    try {
-      objectKeys = await this.prisma.$transaction(
-        async (transaction) => {
-          const photos = await transaction.propertyPhoto.findMany({
-            where: {
-              propertyId: id,
-              property: {
-                landlordId,
-                status: { in: manageableStatuses },
-              },
-            },
-            select: { objectKey: true },
-          });
-          const deleted = await transaction.property.deleteMany({
-            where: {
-              id,
-              landlordId,
-              status: { in: manageableStatuses },
-            },
-          });
-          if (deleted.count !== 1) {
-            await this.throwPropertyMutationFailure(
-              transaction,
-              id,
-              landlordId,
-            );
-          }
-          return photos.map(({ objectKey }) => objectKey);
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
-        throw new ConflictException(
-          'Properties with inquiry or accommodation request history cannot be deleted',
-        );
-      }
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      ) {
-        throw new ConflictException('Property is no longer editable');
-      }
-      throw error;
-    }
-    await this.cleanup(objectKeys);
+    // Keep related inquiries, requests, audit history, and stored photos intact.
+    // The conditional update serializes with other property mutations.
+    const deleted = await this.prisma.property.updateMany({
+      where: { id, landlordId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    if (deleted.count !== 1) throw new NotFoundException('Property not found');
   }
 
   async addPhoto(id: string, landlordId: string, file: PropertyPhotoUpload) {
@@ -215,12 +172,23 @@ export class PropertiesService {
       await this.storage.put(objectKey, file.buffer, file.mimetype);
       return await this.prisma.$transaction(
         async (transaction) => {
-          const property = await transaction.property.findFirst({
-            where: { id, landlordId, status: { in: manageableStatuses } },
-            select: { id: true },
+          // Lock the parent until the photo write commits, including against deletion.
+          const property = await transaction.property.updateMany({
+            where: {
+              id,
+              landlordId,
+              deletedAt: null,
+              status: { in: manageableStatuses },
+            },
+            data: { updatedAt: new Date() },
           });
-          if (!property)
-            throw new ConflictException('Property is no longer editable');
+          if (property.count !== 1) {
+            await this.throwPropertyMutationFailure(
+              transaction,
+              id,
+              landlordId,
+            );
+          }
           const count = await transaction.propertyPhoto.count({
             where: { propertyId: id },
           });
@@ -251,7 +219,11 @@ export class PropertiesService {
 
   async getPhoto(id: string, photoId: string, landlordId: string) {
     const photo = await this.prisma.propertyPhoto.findFirst({
-      where: { id: photoId, propertyId: id, property: { landlordId } },
+      where: {
+        id: photoId,
+        propertyId: id,
+        property: { landlordId, deletedAt: null },
+      },
       select: { objectKey: true, mimeType: true },
     });
     if (!photo) throw new NotFoundException('Property photo not found');
@@ -271,12 +243,29 @@ export class PropertiesService {
     try {
       objectKey = await this.prisma.$transaction(
         async (transaction) => {
+          const property = await transaction.property.updateMany({
+            where: {
+              id,
+              landlordId,
+              deletedAt: null,
+              status: { in: manageableStatuses },
+            },
+            data: { updatedAt: new Date() },
+          });
+          if (property.count !== 1) {
+            await this.throwPropertyMutationFailure(
+              transaction,
+              id,
+              landlordId,
+            );
+          }
           const photo = await transaction.propertyPhoto.findFirst({
             where: {
               id: photoId,
               propertyId: id,
               property: {
                 landlordId,
+                deletedAt: null,
                 status: { in: manageableStatuses },
               },
             },
@@ -296,6 +285,7 @@ export class PropertiesService {
               propertyId: id,
               property: {
                 landlordId,
+                deletedAt: null,
                 status: { in: manageableStatuses },
               },
             },
@@ -328,7 +318,7 @@ export class PropertiesService {
     const property = await this.prisma.$transaction(
       async (transaction) => {
         const property = await transaction.property.findFirst({
-          where: { id, landlordId },
+          where: { id, landlordId, deletedAt: null },
           select: { status: true, _count: { select: { photos: true } } },
         });
         if (!property) throw new NotFoundException('Property not found');
@@ -363,7 +353,12 @@ export class PropertiesService {
           }
         }
         const updated = await transaction.property.updateMany({
-          where: { id, landlordId, status: { in: manageableStatuses } },
+          where: {
+            id,
+            landlordId,
+            deletedAt: null,
+            status: { in: manageableStatuses },
+          },
           data: {
             status: PropertyStatus.PENDING_REVIEW,
             rejectionReason: null,
@@ -375,7 +370,7 @@ export class PropertiesService {
           );
         }
         return transaction.property.findUniqueOrThrow({
-          where: { id },
+          where: { id, deletedAt: null },
           include: {
             photos: { select: safePhotoSelect, orderBy: { sortOrder: 'asc' } },
           },
@@ -392,7 +387,7 @@ export class PropertiesService {
 
   private async requireManageableProperty(id: string, landlordId: string) {
     const property = await this.prisma.property.findFirst({
-      where: { id, landlordId },
+      where: { id, landlordId, deletedAt: null },
       select: { id: true, status: true },
     });
     if (!property) throw new NotFoundException('Property not found');
@@ -410,7 +405,7 @@ export class PropertiesService {
     landlordId: string,
   ): Promise<never> {
     const property = await client.property.findFirst({
-      where: { id, landlordId },
+      where: { id, landlordId, deletedAt: null },
       select: { status: true },
     });
     if (!property) throw new NotFoundException('Property not found');

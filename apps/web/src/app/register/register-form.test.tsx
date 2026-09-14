@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { apiUrl } from "@/lib/api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { RegisterForm } from "./register-form";
 
@@ -31,7 +32,7 @@ describe("RegisterForm", () => {
       expect(push).toHaveBeenCalledWith("/login?registered=1"),
     );
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/auth/register");
+    expect(url).toBe(`${apiUrl}/auth/register`);
     expect(options.credentials).toBe("include");
     expect(JSON.parse(options.body)).toMatchObject({
       role: "TENANT",

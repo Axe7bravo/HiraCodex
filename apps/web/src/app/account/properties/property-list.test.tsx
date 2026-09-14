@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { apiUrl } from "@/lib/api";
 import { PropertyList } from "./property-list";
 
 describe("PropertyList", () => {
@@ -25,7 +26,7 @@ describe("PropertyList", () => {
     fetchMock
       .mockResolvedValueOnce(response([listing]))
       .mockResolvedValueOnce(response({ ...listing, status: "PAUSED" }))
-      .mockResolvedValueOnce(response(undefined, 200));
+      .mockResolvedValueOnce(response(undefined, 204));
     render(<PropertyList />);
 
     expect(await screen.findByRole("link", { name: "Manage property" })).toHaveAttribute(
@@ -36,16 +37,53 @@ describe("PropertyList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(await screen.findByText("Property paused.")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1][0]).toBe(
-      "/api/properties/property-1",
+      `${apiUrl}/properties/property-1`,
     );
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "PATCH" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete property" }));
     await waitFor(() =>
       expect(screen.queryByText(listing.title)).not.toBeInTheDocument(),
     );
     expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: "DELETE" });
     confirm.mockRestore();
+  });
+
+  it("confirms deletion of an ACTIVE property without requiring a pause", async () => {
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      fetchMock.mockResolvedValueOnce(response([{ ...listing, status: "ACTIVE" }]))
+        .mockResolvedValueOnce(response(undefined, 204));
+      render(<PropertyList />);
+      const action = await screen.findByRole("button", { name: "Delete property" });
+      fireEvent.click(action);
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("disappear from your dashboard and the marketplace"));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(listing.title)).toBeInTheDocument();
+      confirm.mockReturnValue(true);
+      fireEvent.click(action);
+      expect(action).toBeDisabled();
+      expect(await screen.findByText("Property deleted.")).toBeInTheDocument();
+      expect(screen.queryByText(listing.title)).not.toBeInTheDocument();
+      expect(fetchMock).toHaveBeenLastCalledWith(`${apiUrl}/properties/property-1`, expect.objectContaining({ method: "DELETE" }));
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it("keeps the property visible and reports a failed deletion", async () => {
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      fetchMock.mockResolvedValueOnce(response([listing]))
+        .mockResolvedValueOnce(response({ message: "Deletion failed" }, 500));
+      render(<PropertyList />);
+      fireEvent.click(await screen.findByRole("button", { name: "Delete property" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Deletion failed");
+      expect(screen.getByText(listing.title)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete property" })).toBeEnabled();
+    } finally {
+      confirm.mockRestore();
+    }
   });
 });
 

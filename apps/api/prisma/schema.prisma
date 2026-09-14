@@ -167,6 +167,8 @@ model Property {
   latitude           Decimal?               @db.Decimal(9, 6)
   longitude          Decimal?               @db.Decimal(9, 6)
   rejectionReason    String?
+  /// Removed from current listings; retained for inquiry/request and audit history.
+  deletedAt          DateTime?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   landlord           User                   @relation(fields: [landlordId], references: [id], onDelete: Restrict)

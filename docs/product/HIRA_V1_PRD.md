@@ -282,6 +282,7 @@ Primary V1 tenant: tertiary student seeking safe, affordable accommodation in or
 ## FR4 — Property Listing Management
 
 - Landlord can create and save listing as draft.
+- Owners (including ADMIN using landlord capabilities) may delete a listing in any status after confirmation. Deletion is soft: it disappears from current listings and discovery, cannot receive new marketplace actions, and retains inquiry/request and audit history. V1 has no restore UI.
 - Required fields: title, description, monthly price, property/room type, area, nearest institution, availability, amenities, photos.
 - Minimum 3 and maximum 10 property photos for submission.
 - Listing lifecycle: DRAFT → PENDING_REVIEW → ACTIVE, with REJECTED / PAUSED / INACTIVE variants.

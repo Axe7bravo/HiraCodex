@@ -44,7 +44,7 @@ describe('AdminPropertiesService', () => {
     property.findMany.mockResolvedValue([]);
     await service.list();
     expect(property.findMany).toHaveBeenCalledWith({
-      where: { status: PropertyStatus.PENDING_REVIEW },
+      where: { deletedAt: null, status: PropertyStatus.PENDING_REVIEW },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
@@ -97,7 +97,11 @@ describe('AdminPropertiesService', () => {
     });
 
     expect(property.updateMany).toHaveBeenCalledWith({
-      where: { id: 'property-1', status: PropertyStatus.PENDING_REVIEW },
+      where: {
+        id: 'property-1',
+        deletedAt: null,
+        status: PropertyStatus.PENDING_REVIEW,
+      },
       data: { status: PropertyStatus.ACTIVE, rejectionReason: null },
     });
     expect(auditLog.create).toHaveBeenCalledWith({

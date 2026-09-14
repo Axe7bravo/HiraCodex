@@ -110,7 +110,7 @@ export class DiscoveryPropertiesService {
 
   async getDetail(id: string) {
     const property = await this.prisma.property.findFirst({
-      where: { id, status: PropertyStatus.ACTIVE },
+      where: { id, deletedAt: null, status: PropertyStatus.ACTIVE },
       select: publicPropertyDetailSelect,
     });
     if (!property) throw new NotFoundException('Property not found');
@@ -132,7 +132,7 @@ export class DiscoveryPropertiesService {
       where: {
         id: photoId,
         propertyId,
-        property: { status: PropertyStatus.ACTIVE },
+        property: { deletedAt: null, status: PropertyStatus.ACTIVE },
       },
       select: { objectKey: true, mimeType: true },
     });
@@ -163,6 +163,7 @@ export class DiscoveryPropertiesService {
     }
 
     return {
+      deletedAt: null,
       status: PropertyStatus.ACTIVE,
       monthlyPrice:
         minimum || maximum ? { gte: minimum, lte: maximum } : undefined,
