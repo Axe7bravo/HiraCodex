@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 import { EmailService } from './email.service';
 
 const mockSend = jest.fn();
@@ -21,6 +22,16 @@ describe('EmailService branded notifications', () => {
   });
 
   const notifications: Array<[string, () => Promise<void>, string]> = [
+    [
+      'tenant welcome',
+      () => service.sendWelcome(recipient, UserRole.TENANT),
+      '/properties',
+    ],
+    [
+      'landlord welcome',
+      () => service.sendWelcome(recipient, UserRole.LANDLORD),
+      '/account/verification',
+    ],
     [
       'password reset',
       () => service.sendPasswordReset(recipient, 'test-token'),

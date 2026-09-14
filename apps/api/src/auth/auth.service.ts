@@ -62,6 +62,13 @@ export class AuthService {
         userId: user.id,
         role: user.role,
       });
+      if (user.role === UserRole.TENANT || user.role === UserRole.LANDLORD) {
+        try {
+          await this.email.sendWelcome(user.email, user.role);
+        } catch {
+          this.logger.error('Welcome email delivery failed');
+        }
+      }
       return user;
     } catch (error) {
       if (

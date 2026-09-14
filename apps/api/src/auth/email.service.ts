@@ -1,11 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { UserRole } from '@prisma/client';
 import { transactionalEmail } from './transactional-email';
 
 @Injectable()
 export class EmailService {
   constructor(private readonly config: ConfigService) {}
+
+  sendWelcome(
+    to: string,
+    role: Extract<UserRole, 'TENANT' | 'LANDLORD'>,
+  ): Promise<void> {
+    const tenant = role === UserRole.TENANT;
+    return this.send(
+      to,
+      'Welcome to Hira',
+      tenant
+        ? 'Hira helps students discover verified student housing in Lesotho. Your account is ready to explore available properties.'
+        : 'Your Hira account is ready. Complete your account details and submit your landlord verification before getting your properties live.',
+      tenant ? '/properties' : '/account/verification',
+      tenant ? 'Explore properties' : 'Complete verification',
+    );
+  }
 
   async sendPasswordReset(to: string, token: string): Promise<void> {
     const apiKey = this.config.getOrThrow<string>('RESEND_API_KEY');
